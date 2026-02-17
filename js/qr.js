@@ -35,14 +35,16 @@
 
     // --- Share functions ---
     function shareEmail(playerName, cardUrl, email) {
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&margin=8&data=${encodeURIComponent(cardUrl)}`;
         const subject = encodeURIComponent(`Carnet Digital — ${playerName} — Liga Softball Masters +40`);
-        const body = encodeURIComponent(`Hola,\n\nAquí tienes el carnet digital de ${playerName}:\n${cardUrl}\n\nEscanea el QR o haz clic en el enlace para ver la ficha del jugador.\n\nLiga Softball Masters +40`);
+        const body = encodeURIComponent(`Hola,\n\nAquí tienes el carnet digital de ${playerName}:\n\n📋 Ver ficha del jugador:\n${cardUrl}\n\n📱 Descargar código QR:\n${qrImageUrl}\n\nEscanea el QR o haz clic en el enlace para ver la ficha del jugador.\n\nLiga Softball Masters +40`);
         const to = email ? encodeURIComponent(email) : '';
         window.open(`mailto:${to}?subject=${subject}&body=${body}`);
     }
 
     function shareWhatsApp(playerName, cardUrl, phone) {
-        const text = encodeURIComponent(`⚾ Carnet Digital — ${playerName}\n\n${cardUrl}\n\nLiga Softball Masters +40`);
+        const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&format=png&margin=8&data=${encodeURIComponent(cardUrl)}`;
+        const text = encodeURIComponent(`⚾ Carnet Digital — ${playerName}\n\n📋 Ver ficha:\n${cardUrl}\n\n📱 Código QR:\n${qrImageUrl}\n\nLiga Softball Masters +40`);
         const dest = phone ? phone.replace(/[^0-9+]/g, '') : '';
         window.open(`https://wa.me/${dest}?text=${text}`, '_blank');
     }
