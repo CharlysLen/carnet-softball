@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Calendario de partidos — Liga de Softball Masters +40.">
+    <title>Calendario — Softball Masters +40</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+</head>
+
+<body class="admin-body">
+    <header class="admin-header">
+        <div class="admin-header-inner">
+            <div>
+                <h1 class="admin-title">📅 Calendario de Partidos</h1>
+                <p class="admin-subtitle">Liga Softball Masters +40 — Temporada 2026</p>
+            </div>
+            <nav class="admin-nav">
+                <a href="admin.html" class="nav-link">🏠 Equipos</a>
+                <a href="calendario.html" class="nav-link active">📅 Calendario</a>
+                <a href="qr-generator.html" class="nav-link">📱 QR</a>
+            </nav>
+            <div class="admin-actions">
+                <button class="btn btn-primary" id="btn-add-match">+ Nuevo Partido</button>
+            </div>
+        </div>
+    </header>
+    <main class="calendar-content">
+        <div class="calendar-grid" id="calendar-grid"></div>
+    </main>
+
+    <!-- Team roster popup -->
+    <div class="calendar-roster-overlay" id="roster-overlay">
+        <div class="calendar-roster-panel" id="roster-panel"></div>
+    </div>
+
+    <!-- Add Match Modal -->
+    <div class="modal-overlay" id="modal-add-match">
+        <div class="modal">
+            <h2 class="modal-title">+ Nuevo Partido</h2>
+            <form id="add-match-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="match-fecha">Fecha</label>
+                        <input class="form-input" type="date" id="match-fecha" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="match-hora">Hora</label>
+                        <input class="form-input" type="time" id="match-hora" required value="10:00">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="match-local">Equipo Local</label>
+                        <select class="form-select" id="match-local"></select>
+                    </div>
+                    <div class="form-group"
+                        style="display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;">
+                        <span
+                            style="font-family:var(--font-display);font-weight:700;color:var(--red);letter-spacing:2px;">VS</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="match-visitante">Equipo Visitante</label>
+                        <select class="form-select" id="match-visitante"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="match-campo">Campo / Ubicación</label>
+                    <input class="form-input" type="text" id="match-campo" required
+                        placeholder="Ej: Campo Municipal Vallecas">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="match-jornada">Jornada</label>
+                        <input class="form-input" type="number" id="match-jornada" min="1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="match-arbitro">Árbitro <span
+                                style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                        <input class="form-input" type="text" id="match-arbitro" placeholder="Nombre del árbitro">
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="Cal.closeModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Partido</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/storage.js"></script>
+    <script src="js/calendario.js"></script>
+</body>
+
+</html>

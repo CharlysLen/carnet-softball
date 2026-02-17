@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Generador de códigos QR para jugadores — Liga de Softball Masters +40.">
+    <title>Generador QR — Softball Masters +40</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📱</text></svg>">
+</head>
+
+<body class="admin-body qr-body">
+
+    <header class="admin-header">
+        <div class="admin-header-inner">
+            <div>
+                <h1 class="admin-title">📱 Generador de Códigos QR</h1>
+                <p class="admin-subtitle">Genera e imprime los QR para cada jugador</p>
+            </div>
+            <nav class="admin-nav">
+                <a href="admin.html" class="nav-link">🏠 Equipos</a>
+                <a href="calendario.html" class="nav-link">📅 Calendario</a>
+                <a href="qr-generator.html" class="nav-link active">📱 QR</a>
+            </nav>
+            <div class="admin-actions">
+                <button class="btn btn-secondary" onclick="window.print()">🖨 Imprimir Todos</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="admin-content">
+        <div class="qr-config">
+            <h2 class="qr-config-title">Configuración de URL Base</h2>
+            <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:10px;">
+                URL base de la app. Los QR apuntarán a <code style="color:#f5a623;">?id=XXX</code>
+            </p>
+            <input type="url" class="qr-url-input" id="base-url" value="https://TU-USUARIO.github.io/carnet-softball/"
+                placeholder="https://tu-liga.github.io/">
+            <button class="btn btn-primary" id="btn-generate-qr">Generar Códigos QR</button>
+        </div>
+        <div class="qr-grid" id="qr-grid"></div>
+    </main>
+
+    <script src="js/storage.js"></script>
+    <script src="js/qr.js"></script>
+</body>
+
+</html>

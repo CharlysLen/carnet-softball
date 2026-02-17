@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Panel de administración — Liga de Softball Masters +40.">
+    <title>Admin — Softball Masters +40</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+</head>
+
+<body class="admin-body">
+
+    <header class="admin-header">
+
+        <div class="admin-header-inner">
+            <div style="flex:1">
+                <h1 class="admin-title">🥎 PANEL DE ADMINISTRACIÓN</h1>
+                <div class="admin-subtitle">Liga Softball Masters +40 — Gestión Oficial</div>
+            </div>
+
+            <nav style="display:flex;gap:20px;margin-right:auto;margin-left:40px;">
+                <a href="#" class="nav-link active" onclick="Admin.switchTab('teams')"
+                    style="color:var(--white);text-decoration:none;font-weight:600;font-size:0.9rem;">🛡 EQUIPOS</a>
+                <a href="#" class="nav-link" onclick="Admin.switchTab('calendar')"
+                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">📅 CALENDARIO</a>
+                <a href="#" class="nav-link" onclick="Admin.switchTab('standings')"
+                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">🏆 CLASIFICACIÓN</a>
+            </nav>
+
+            <div class="admin-actions">
+                <button class="btn btn-secondary" id="btn-add-team">🛡 Nuevo Equipo</button>
+                <button class="btn btn-secondary" id="btn-add-player">+ Nuevo Jugador</button>
+                <button class="btn btn-secondary" id="btn-import-csv">📄 Importar CSV</button>
+                <button class="btn btn-secondary" id="btn-export">⬇ Exportar JSON</button>
+                <button class="btn btn-secondary" id="btn-demo"
+                    style="background:var(--bg-card);border:1px solid var(--gold);color:var(--gold);">🎲 Datos
+                    Demo</button>
+                <button class="btn btn-secondary" id="btn-reset" title="Borrar todo"
+                    style="color:var(--red);border-color:var(--red);">🗑</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="admin-content">
+        <div class="stats-row" id="stats-row"></div>
+        <div id="main-content"></div>
+    </main>
+
+    <!-- Add Player Modal -->
+    <div class="modal-overlay" id="modal-add-player">
+        <div class="modal">
+            <h2 class="modal-title">Nuevo Jugador</h2>
+            <form id="add-player-form">
+                <div class="form-group">
+                    <label class="form-label" for="inp-nombre">Nombre Completo</label>
+                    <input class="form-input" type="text" id="inp-nombre" required placeholder="Carlos Mendoza García">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="inp-dorsal">Dorsal</label>
+                        <input class="form-input" type="number" id="inp-dorsal" required min="0" max="99"
+                            placeholder="7">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="inp-posicion">Posición</label>
+                        <select class="form-select" id="inp-posicion">
+                            <option value="Pitcher">Pitcher</option>
+                            <option value="Catcher">Catcher</option>
+                            <option value="Primera Base">Primera Base</option>
+                            <option value="Segunda Base">Segunda Base</option>
+                            <option value="Tercera Base">Tercera Base</option>
+                            <option value="Shortstop">Shortstop</option>
+                            <option value="Left Field">Left Field</option>
+                            <option value="Center Field">Center Field</option>
+                            <option value="Right Field">Right Field</option>
+                            <option value="Shortfield">Shortfield</option>
+                            <option value="Utility">Utility</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Bio Section -->
+                <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;padding-top:16px;">
+                    <label class="form-label" style="margin-bottom:8px;display:block;color:var(--gold);">Datos
+                        Físicos
+                        (Opcional)</label>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">Altura (m)</label><input class="form-input"
+                                type="text" id="inp-altura" placeholder="1.80"></div>
+                        <div class="form-group"><label class="form-label">Peso (kg)</label><input class="form-input"
+                                type="text" id="inp-peso" placeholder="85"></div>
+                        <div class="form-group"><label class="form-label">Edad</label><input class="form-input"
+                                type="number" id="inp-edad" placeholder="45"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="inp-equipo">Equipo</label>
+                    <select class="form-select" id="inp-equipo"></select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="inp-foto">Foto del Jugador <span
+                            style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                    <input class="form-input" type="file" id="inp-foto" accept="image/*" style="padding:8px;">
+                    <div id="foto-preview" style="margin-top:8px;display:none;">
+                        <img id="foto-preview-img"
+                            style="width:60px;height:60px;object-fit:cover;border-radius:10px;border:2px solid var(--gold);">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="inp-estado">Estado</label>
+                        <select class="form-select" id="inp-estado">
+                            <option value="habilitado">Habilitado</option>
+                            <option value="suspendido">Suspendido</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="inp-verificado">Verificado</label>
+                        <select class="form-select" id="inp-verificado">
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- Stats Section -->
+                <div style="border-top:1px solid rgba(255,255,255,0.1);margin:16px 0;padding-top:16px;">
+                    <label class="form-label" style="margin-bottom:8px;display:block;color:var(--gold);">Estadísticas
+                        (Opcional)</label>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">AVG</label><input class="form-input"
+                                type="text" id="inp-avg" placeholder=".300"></div>
+                        <div class="form-group"><label class="form-label">HR</label><input class="form-input"
+                                type="number" id="inp-hr" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">RBI</label><input class="form-input"
+                                type="number" id="inp-rbi" placeholder="0"></div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group"><label class="form-label">H</label><input class="form-input"
+                                type="number" id="inp-h" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">AB</label><input class="form-input"
+                                type="number" id="inp-ab" placeholder="0"></div>
+                        <div class="form-group"><label class="form-label">R</label><input class="form-input"
+                                type="number" id="inp-r" placeholder="0"></div>
+                    </div>
+                </div>
+                <input type="hidden" id="inp-id"> <!-- Hidden ID for editing -->
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="Admin.closeModal('modal-add-player')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Jugador</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Team Modal -->
+    <div class="modal-overlay" id="modal-add-team">
+        <div class="modal">
+            <h2 class="modal-title">🛡 Nuevo Equipo</h2>
+            <form id="add-team-form">
+                <div class="form-group">
+                    <label class="form-label" for="team-nombre">Nombre del Equipo</label>
+                    <input class="form-input" type="text" id="team-nombre" required placeholder="Leones de Alcorcón">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="team-escudo">Escudo / Emoji</label>
+                        <input class="form-input" type="text" id="team-escudo" value="🥎" maxlength="4"
+                            style="font-size:1.5rem;text-align:center;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="team-color">Color Principal</label>
+                        <input class="form-input" type="color" id="team-color" value="#f5a623"
+                            style="height:44px;padding:4px;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="team-imagen">Imagen de Escudo <span
+                            style="color:var(--white-muted);font-weight:400">(reemplaza el emoji)</span></label>
+                    <input class="form-input" type="file" id="team-imagen" accept="image/*" style="padding:8px;">
+                    <div id="team-imagen-preview" style="margin-top:8px;display:none;">
+                        <img id="team-imagen-preview-img"
+                            style="width:64px;height:64px;object-fit:contain;border-radius:10px;border:2px solid var(--gold);background:var(--bg-card-inner);padding:4px;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="team-entrenador">Entrenador <span
+                            style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                    <input class="form-input" type="text" id="team-entrenador" placeholder="Nombre del entrenador">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="team-email">Email de Contacto <span
+                            style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                    <input class="form-input" type="email" id="team-email" placeholder="equipo@ejemplo.com">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="team-telefono">Teléfono de Contacto <span
+                            style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                    <input class="form-input" type="tel" id="team-telefono" placeholder="+34 600 123 456">
+                </div>
+                <div class="modal-actions">
+                    <input type="hidden" id="team-original-name">
+                    <button type="button" class="btn btn-secondary"
+                        onclick="Admin.closeModal('modal-add-team')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Equipo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CSV Import Modal -->
+    <div class="modal-overlay" id="modal-import-csv">
+        <div class="modal">
+            <h2 class="modal-title">📄 Importar Jugadores (CSV)</h2>
+            <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:16px;line-height:1.6;">
+                Archivo <strong>.csv</strong> separado por <strong>;</strong>
+            </p>
+            <div
+                style="background:var(--bg-card-inner);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-family:monospace;font-size:0.75rem;color:var(--gold);overflow-x:auto;white-space:nowrap;">
+                Nombre;Dorsal;Equipo;Posicion;Estado
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="csv-file">Archivo CSV</label>
+                <input class="form-input" type="file" id="csv-file" accept=".csv,.txt" style="padding:8px;">
+            </div>
+            <div id="csv-preview" style="display:none;margin-bottom:16px;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary"
+                    onclick="Admin.closeModal('modal-import-csv')">Cancelar</button>
+                <button type="button" class="btn btn-secondary" id="btn-download-template">↓ Plantilla</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-import">Importar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/storage.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+
+</html>

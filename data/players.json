@@ -1,0 +1,120 @@
+{
+  "equipos": [
+    {
+      "id": "tigres",
+      "nombre": "Tigres de Vallecas",
+      "nombreCorto": "Tigres",
+      "color": "#f5a623",
+      "colorSecundario": "#1a1a2e",
+      "escudo": "🐯",
+      "imagen": ""
+    },
+    {
+      "id": "halcones",
+      "nombre": "Halcones de Getafe",
+      "nombreCorto": "Halcones",
+      "color": "#ff1744",
+      "colorSecundario": "#1a0a0e",
+      "escudo": "🦅",
+      "imagen": ""
+    }
+  ],
+  "jugadores": [
+    {
+      "id": "001",
+      "nombre": "Carlos Mendoza García",
+      "dorsal": 7,
+      "equipo": "Tigres de Vallecas",
+      "posicion": "Pitcher",
+      "foto": "",
+      "estado": "habilitado",
+      "verificado": true,
+      "temporada": "2026",
+      "stats": {
+        "avg": ".345",
+        "hr": "3",
+        "rbi": "12",
+        "h": "20",
+        "ab": "58",
+        "r": "15"
+      }
+    },
+    {
+      "id": "002",
+      "nombre": "Miguel Ángel Ruiz López",
+      "dorsal": 14,
+      "equipo": "Tigres de Vallecas",
+      "posicion": "Catcher",
+      "foto": "",
+      "estado": "habilitado",
+      "verificado": true,
+      "temporada": "2026",
+      "stats": {
+        "avg": ".290",
+        "hr": "1",
+        "rbi": "8",
+        "h": "14",
+        "ab": "48",
+        "r": "9"
+      }
+    },
+    {
+      "id": "003",
+      "nombre": "Javier Fernández Torres",
+      "dorsal": 23,
+      "equipo": "Halcones de Getafe",
+      "posicion": "Shortstop",
+      "foto": "",
+      "estado": "suspendido",
+      "verificado": false,
+      "temporada": "2026",
+      "stats": {
+        "avg": ".310",
+        "hr": "2",
+        "rbi": "10",
+        "h": "18",
+        "ab": "58",
+        "r": "12"
+      }
+    },
+    {
+      "id": "004",
+      "nombre": "Roberto Sánchez Martín",
+      "dorsal": 5,
+      "equipo": "Halcones de Getafe",
+      "posicion": "Primera Base",
+      "foto": "",
+      "estado": "habilitado",
+      "verificado": true,
+      "temporada": "2026",
+      "stats": {
+        "avg": ".275",
+        "hr": "5",
+        "rbi": "18",
+        "h": "22",
+        "ab": "80",
+        "r": "14"
+      }
+    }
+  ],
+  "partidos": [
+    {
+      "id": "p1",
+      "fecha": "2026-03-01",
+      "hora": "10:00",
+      "local": "Tigres de Vallecas",
+      "visitante": "Halcones de Getafe",
+      "campo": "Campo Municipal Vallecas",
+      "jornada": 1
+    },
+    {
+      "id": "p2",
+      "fecha": "2026-03-08",
+      "hora": "11:00",
+      "local": "Halcones de Getafe",
+      "visitante": "Tigres de Vallecas",
+      "campo": "Polideportivo Getafe",
+      "jornada": 2
+    }
+  ]
+}
