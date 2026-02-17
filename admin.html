@@ -267,6 +267,25 @@
         </div>
     </div>
 
+    <!-- Match Stats CSV Modal -->
+    <div class="modal-overlay" id="modal-match-csv">
+        <div class="modal">
+            <h2 class="modal-title">📤 Subir Estadísticas del Partido</h2>
+            <p style="font-size:0.8rem;color:rgba(255,255,255,0.5);margin-bottom:12px;line-height:1.6;">
+                Sube el CSV con las estadísticas individuales. Formato: <strong>JugadorID;Nombre;Equipo;AB;H;HR;RBI;R</strong>
+            </p>
+            <div class="form-group">
+                <label class="form-label" for="match-csv-file">Archivo CSV</label>
+                <input class="form-input" type="file" id="match-csv-file" accept=".csv,.txt" style="padding:8px;">
+            </div>
+            <div id="match-csv-preview" style="display:none;margin-bottom:16px;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="Admin.closeModal('modal-match-csv')">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btn-confirm-match-csv">Importar Stats</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Add/Edit User Modal -->
     <div class="modal-overlay" id="modal-add-user">
         <div class="modal">

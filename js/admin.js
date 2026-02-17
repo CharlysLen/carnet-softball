@@ -974,7 +974,13 @@
 
     let html = `
       <div class="match-detail-view" style="max-width:900px;margin:0 auto;animation:fadeIn 0.4s ease;">
-        <button class="btn btn-secondary" onclick="Admin.backToCalendar()" style="margin-bottom:20px;">← Volver al Calendario</button>
+        <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
+          <button class="btn btn-secondary" onclick="Admin.backToCalendar()">← Volver al Calendario</button>
+          ${canEditTeam(m.local) || canEditTeam(m.visitante) ? `
+            <button class="btn btn-secondary" onclick="Admin.downloadMatchTemplate('${m.id}')" style="margin-left:auto;">📥 Descargar Plantilla CSV</button>
+            <button class="btn btn-primary" onclick="Admin.openMatchCSV('${m.id}')">📤 Subir Stats CSV</button>
+          ` : ''}
+        </div>
         
         <div class="match-scoreboard" style="background:var(--bg-card);border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.05);padding:20px;">
           <div style="text-align:center;color:var(--white-muted);font-size:0.8rem;text-transform:uppercase;margin-bottom:15px;letter-spacing:1px;">
@@ -1169,6 +1175,129 @@
     autoSave(); renderView();
   }
 
+  // ── MATCH STATS CSV ──
+  let matchCsvData = [];
+  let matchCsvTargetId = null;
+
+  function downloadMatchTemplate(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    const homePlayers = players.filter(p => p.equipo === m.local);
+    const awayPlayers = players.filter(p => p.equipo === m.visitante);
+    const allPlayers = [...homePlayers, ...awayPlayers];
+
+    const headers = 'JugadorID;Nombre;Equipo;AB;H;HR;RBI;R';
+    const rows = allPlayers.map(p => {
+      const s = (m.playerStats && m.playerStats[p.id]) || {};
+      return `${p.id};${p.nombre};${p.equipo};${s.ab || 0};${s.h || 0};${s.hr || 0};${s.rbi || 0};${s.r || 0}`;
+    });
+
+    const csv = '\ufeff' + headers + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const dateStr = m.fecha || 'partido';
+    a.download = `stats_${m.local.replace(/\s+/g, '_')}_vs_${m.visitante.replace(/\s+/g, '_')}_${dateStr}.csv`;
+    a.click();
+  }
+
+  function openMatchCSV(matchId) {
+    matchCsvTargetId = matchId;
+    matchCsvData = [];
+    const fileInput = document.getElementById('match-csv-file');
+    if (fileInput) fileInput.value = '';
+    document.getElementById('match-csv-preview').style.display = 'none';
+    openModal('modal-match-csv');
+  }
+
+  function handleMatchCSVFile() {
+    const file = document.getElementById('match-csv-file').files[0];
+    const preview = document.getElementById('match-csv-preview');
+    if (!file) { preview.style.display = 'none'; matchCsvData = []; return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const lines = e.target.result.split(/\r?\n/).filter(l => l.trim());
+      matchCsvData = [];
+      const start = (lines[0] && lines[0].toLowerCase().includes('jugadorid')) ? 1 : 0;
+      for (let i = start; i < lines.length; i++) {
+        const p = lines[i].split(';').map(s => s.trim());
+        if (p.length >= 5) {
+          matchCsvData.push({
+            id: p[0], nombre: p[1] || '', equipo: p[2] || '',
+            ab: parseInt(p[3], 10) || 0, h: parseInt(p[4], 10) || 0,
+            hr: parseInt(p[5], 10) || 0, rbi: parseInt(p[6], 10) || 0, r: parseInt(p[7], 10) || 0
+          });
+        }
+      }
+      if (matchCsvData.length > 0) {
+        let h = `<div style="font-size:0.7rem;color:var(--green);margin-bottom:8px;">✓ ${matchCsvData.length} JUGADORES</div>`;
+        h += '<div style="max-height:200px;overflow-y:auto;background:var(--bg-card-inner);border-radius:8px;padding:8px 12px;">';
+        matchCsvData.forEach(p => {
+          h += `<div style="font-size:0.75rem;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--white-soft);display:flex;justify-content:space-between;">
+            <span>${p.nombre} <span style="color:var(--white-muted)">(${p.equipo})</span></span>
+            <span style="font-family:monospace;color:var(--gold);">${p.h}-${p.ab} | HR:${p.hr} RBI:${p.rbi} R:${p.r}</span>
+          </div>`;
+        });
+        h += '</div>';
+        preview.innerHTML = h;
+      } else {
+        preview.innerHTML = '<div style="color:var(--red);font-size:0.8rem">⚠ Sin datos válidos.</div>';
+      }
+      preview.style.display = 'block';
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  function confirmMatchCSV() {
+    if (!matchCsvData.length || !matchCsvTargetId) { alert('Sube un CSV primero.'); return; }
+    const m = partidos.find(x => x.id === matchCsvTargetId);
+    if (!m) return;
+
+    if (!m.playerStats) m.playerStats = {};
+    for (const row of matchCsvData) {
+      // Match by ID first, fallback to name
+      let pid = row.id;
+      if (!players.find(p => p.id === pid)) {
+        const byName = players.find(p => p.nombre.toLowerCase() === row.nombre.toLowerCase());
+        if (byName) pid = byName.id;
+        else continue; // Skip unknown players
+      }
+      m.playerStats[pid] = { ab: row.ab, h: row.h, hr: row.hr, rbi: row.rbi, r: row.r };
+    }
+
+    recalcAllPlayerStats();
+    autoSave();
+    matchCsvData = [];
+    matchCsvTargetId = null;
+    closeModal('modal-match-csv');
+    renderView();
+    alert(`✅ Estadísticas del partido actualizadas.`);
+  }
+
+  function recalcAllPlayerStats() {
+    // Reset all player stats
+    for (const p of players) {
+      p.stats = { ab: 0, h: 0, hr: 0, rbi: 0, r: 0, avg: '.000' };
+    }
+    // Accumulate from all matches
+    for (const m of partidos) {
+      if (!m.playerStats) continue;
+      for (const [pid, s] of Object.entries(m.playerStats)) {
+        const p = players.find(x => x.id === pid);
+        if (!p) continue;
+        p.stats.ab += (parseInt(s.ab, 10) || 0);
+        p.stats.h += (parseInt(s.h, 10) || 0);
+        p.stats.hr += (parseInt(s.hr, 10) || 0);
+        p.stats.rbi += (parseInt(s.rbi, 10) || 0);
+        p.stats.r += (parseInt(s.r, 10) || 0);
+      }
+    }
+    // Calculate AVG
+    for (const p of players) {
+      p.stats.avg = p.stats.ab > 0 ? (p.stats.h / p.stats.ab).toFixed(3).replace(/^0+/, '') : '.000';
+    }
+  }
+
   // ── MODALS ──
   function openModal(id) { document.getElementById(id).classList.add('active'); }
   function closeModal(id) { document.getElementById(id).classList.remove('active'); }
@@ -1189,6 +1318,8 @@
     document.getElementById('inp-foto').addEventListener('change', handlePlayerPhotoChange);
     document.getElementById('team-imagen').addEventListener('change', handleTeamImageChange);
     document.getElementById('add-user-form').addEventListener('submit', saveUser);
+    document.getElementById('match-csv-file').addEventListener('change', handleMatchCSVFile);
+    document.getElementById('btn-confirm-match-csv').addEventListener('click', confirmMatchCSV);
     document.querySelectorAll('.modal-overlay').forEach(o => {
       o.addEventListener('click', function (e) { if (e.target === this) closeModal(this.id); });
     });
@@ -1279,6 +1410,13 @@
     exportTeamCSV,
     resetData,
     generateDemoData,
+
+    // Match stats CSV
+    downloadMatchTemplate,
+    openMatchCSV,
+    handleMatchCSVFile,
+    confirmMatchCSV,
+    recalcAllPlayerStats,
 
     // User management
     applyPermissions,
