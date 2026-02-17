@@ -341,7 +341,10 @@
                 sessionStorage.setItem('admin_auth_equipo', found.equipo || '');
                 sessionStorage.setItem('admin_auth_nombre', found.nombre);
                 showAdmin();
-                if (typeof Admin !== 'undefined' && Admin.applyPermissions) Admin.applyPermissions();
+                if (typeof Admin !== 'undefined') {
+                    if (Admin.applyPermissions) Admin.applyPermissions();
+                    if (Admin.renderView) Admin.renderView();
+                }
             } else {
                 loginError.style.display = 'block';
                 document.getElementById('login-pass').value = '';
