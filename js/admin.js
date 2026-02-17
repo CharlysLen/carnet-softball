@@ -194,6 +194,7 @@
               <h3 class="roster-player-name">${p.nombre}</h3>
               <span class="roster-position">${p.posicion}</span>
               <div style="font-size:0.6rem;color:var(--white-muted);margin-top:2px;">AVG: ${p.stats && p.stats.avg ? p.stats.avg : '-'}</div>
+              ${canEdit && (p.email || p.telefono) ? `<div style="font-size:0.55rem;color:var(--white-muted);margin-top:2px;">${p.email ? '✉ ' + p.email : ''}${p.email && p.telefono ? ' · ' : ''}${p.telefono ? '📞 ' + p.telefono : ''}</div>` : ''}
             </div>
             <div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>
             <div class="roster-actions">
@@ -299,6 +300,8 @@
     document.getElementById('inp-dorsal').value = p.dorsal;
     document.getElementById('inp-posicion').value = p.posicion;
     document.getElementById('inp-equipo').value = p.equipo;
+    document.getElementById('inp-email').value = p.email || '';
+    document.getElementById('inp-telefono').value = p.telefono || '';
     document.getElementById('inp-estado').value = p.estado;
     document.getElementById('inp-verificado').value = p.verificado.toString();
     document.getElementById('inp-altura').value = p.altura || '';
@@ -418,6 +421,8 @@
         p.altura = document.getElementById('inp-altura').value.trim();
         p.peso = document.getElementById('inp-peso').value.trim();
         p.edad = document.getElementById('inp-edad').value.trim();
+        p.email = document.getElementById('inp-email').value.trim();
+        p.telefono = document.getElementById('inp-telefono').value.trim();
         p.stats = stats;
         if (pendingPlayerPhoto) p.foto = pendingPlayerPhoto;
       }
@@ -435,6 +440,8 @@
         altura: document.getElementById('inp-altura').value.trim(),
         peso: document.getElementById('inp-peso').value.trim(),
         edad: document.getElementById('inp-edad').value.trim(),
+        email: document.getElementById('inp-email').value.trim(),
+        telefono: document.getElementById('inp-telefono').value.trim(),
         temporada: new Date().getFullYear().toString(),
         stats: stats
       });

@@ -1,6 +1,6 @@
 /* ============================================
    SOFTBALL +40 — Persistence Layer
-   localStorage auto-save / load
+   Firebase Realtime Database + localStorage cache
    Stores: equipos, jugadores, partidos, usuarios
    ============================================ */
 
@@ -9,19 +9,60 @@ const AppStore = (function () {
 
     const STORAGE_KEY = 'softball40_data';
     const SEED_URL = 'data/players.json';
+    const FB_PATH = 'softball40';
 
+    function fbAvailable() {
+        return typeof firebaseDB !== 'undefined';
+    }
+
+    // --- Firebase helpers ---
+    function fbSave(data) {
+        if (!fbAvailable()) return Promise.resolve();
+        return firebaseDB.ref(FB_PATH).set(data)
+            .then(() => console.log('[Firebase] Saved'))
+            .catch(e => console.error('[Firebase] Save failed:', e));
+    }
+
+    function fbLoad() {
+        if (!fbAvailable()) return Promise.resolve(null);
+        return firebaseDB.ref(FB_PATH).once('value')
+            .then(snap => {
+                const val = snap.val();
+                if (val && val.jugadores) {
+                    console.log('[Firebase] Loaded from cloud');
+                    return val;
+                }
+                return null;
+            })
+            .catch(e => { console.error('[Firebase] Load failed:', e); return null; });
+    }
+
+    // --- Main load ---
     async function load() {
+        // 1. Try Firebase first (cloud = source of truth)
+        const fbData = await fbLoad();
+        if (fbData) {
+            const normalized = normalize(fbData);
+            localSave(normalized); // cache locally
+            return normalized;
+        }
+
+        // 2. Fallback to localStorage
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             try {
                 const data = JSON.parse(saved);
                 if (data && data.jugadores) {
-                    console.log(`[Storage] Loaded from localStorage`);
-                    return normalize(data);
+                    console.log('[Storage] Loaded from localStorage');
+                    const normalized = normalize(data);
+                    // Push local data to Firebase if available
+                    fbSave(normalized);
+                    return normalized;
                 }
             } catch (e) { /* corrupt */ }
         }
 
+        // 3. Seed from JSON file
         try {
             const resp = await fetch(SEED_URL);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -40,13 +81,23 @@ const AppStore = (function () {
         return [{ id: 'admin', nombre: 'Administrador', user: 'admin', pass: '1234', rol: 'admin', equipo: null }];
     }
 
-    function save(data) {
+    function localSave(data) {
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
-        catch (e) { console.error('[Storage] Save failed:', e); }
+        catch (e) { console.error('[Storage] LocalSave failed:', e); }
+    }
+
+    function save(data) {
+        localSave(data);
+        fbSave(data);
     }
 
     function reset() {
         localStorage.removeItem(STORAGE_KEY);
+        if (fbAvailable()) {
+            firebaseDB.ref(FB_PATH).remove()
+                .then(() => console.log('[Firebase] Data removed'))
+                .catch(e => console.error('[Firebase] Remove failed:', e));
+        }
     }
 
     function normalize(data) {
@@ -69,7 +120,6 @@ const AppStore = (function () {
             }
         }
 
-        // Ensure stats object on every player
         for (const p of jugadores) {
             if (!p.stats) {
                 p.stats = { avg: '', hr: '', rbi: '', h: '', ab: '', r: '' };

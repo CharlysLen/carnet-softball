@@ -127,6 +127,16 @@
                                 type="number" id="inp-edad" placeholder="45"></div>
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="inp-email">Email <span style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                        <input class="form-input" type="email" id="inp-email" placeholder="jugador@email.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="inp-telefono">Teléfono <span style="color:var(--white-muted);font-weight:400">(opcional)</span></label>
+                        <input class="form-input" type="tel" id="inp-telefono" placeholder="+34 600 000 000">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label class="form-label" for="inp-equipo">Equipo</label>
                     <select class="form-select" id="inp-equipo"></select>
@@ -329,6 +339,9 @@
 
     </div><!-- /admin-panel -->
 
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="js/firebase-config.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/admin.js"></script>
     <script>

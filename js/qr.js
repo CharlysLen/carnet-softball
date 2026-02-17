@@ -34,15 +34,17 @@
     }
 
     // --- Share functions ---
-    function shareEmail(playerName, cardUrl) {
+    function shareEmail(playerName, cardUrl, email) {
         const subject = encodeURIComponent(`Carnet Digital — ${playerName} — Liga Softball Masters +40`);
         const body = encodeURIComponent(`Hola,\n\nAquí tienes el carnet digital de ${playerName}:\n${cardUrl}\n\nEscanea el QR o haz clic en el enlace para ver la ficha del jugador.\n\nLiga Softball Masters +40`);
-        window.open(`mailto:?subject=${subject}&body=${body}`);
+        const to = email ? encodeURIComponent(email) : '';
+        window.open(`mailto:${to}?subject=${subject}&body=${body}`);
     }
 
-    function shareWhatsApp(playerName, cardUrl) {
+    function shareWhatsApp(playerName, cardUrl, phone) {
         const text = encodeURIComponent(`⚾ Carnet Digital — ${playerName}\n\n${cardUrl}\n\nLiga Softball Masters +40`);
-        window.open(`https://wa.me/?text=${text}`, '_blank');
+        const dest = phone ? phone.replace(/[^0-9+]/g, '') : '';
+        window.open(`https://wa.me/${dest}?text=${text}`, '_blank');
     }
 
     function generateQRCodes() {
@@ -83,11 +85,11 @@
           <div class="qr-player-meta">#${player.dorsal} · ${player.posicion}</div>
           <div class="qr-player-url">${url}</div>
           <div class="qr-share-row">
-            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); QR.shareEmail('${player.nombre.replace(/'/g, "\\'")}', '${url}')" title="Enviar por email">
-              ✉️ Email
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation(); QR.shareEmail('${player.nombre.replace(/'/g, "\\'")}', '${url}', '${(player.email || '').replace(/'/g, "\\'")}')" title="${player.email ? 'Enviar a ' + player.email : 'Enviar por email'}">
+              ✉️ ${player.email ? 'Enviar' : 'Email'}
             </button>
-            <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); QR.shareWhatsApp('${player.nombre.replace(/'/g, "\\'")}', '${url}')" title="Enviar por WhatsApp">
-              💬 WhatsApp
+            <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); QR.shareWhatsApp('${player.nombre.replace(/'/g, "\\'")}', '${url}', '${(player.telefono || '').replace(/'/g, "\\'")}')" title="${player.telefono ? 'Enviar a ' + player.telefono : 'Enviar por WhatsApp'}">
+              💬 ${player.telefono ? 'Enviar' : 'WhatsApp'}
             </button>
           </div>
         `;
