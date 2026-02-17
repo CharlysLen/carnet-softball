@@ -1,7 +1,7 @@
 /* ============================================
    SOFTBALL +40 — Persistence Layer
    localStorage auto-save / load
-   Stores: equipos, jugadores, partidos
+   Stores: equipos, jugadores, partidos, usuarios
    ============================================ */
 
 const AppStore = (function () {
@@ -32,8 +32,12 @@ const AppStore = (function () {
             return normalized;
         } catch (err) {
             console.error('[Storage] Seed failed:', err);
-            return { equipos: [], jugadores: [], partidos: [] };
+            return { equipos: [], jugadores: [], partidos: [], usuarios: defaultUsers() };
         }
+    }
+
+    function defaultUsers() {
+        return [{ id: 'admin', nombre: 'Administrador', user: 'admin', pass: '1234', rol: 'admin', equipo: null }];
     }
 
     function save(data) {
@@ -49,6 +53,10 @@ const AppStore = (function () {
         const equipos = data.equipos || [];
         const jugadores = data.jugadores || [];
         const partidos = data.partidos || [];
+        let usuarios = data.usuarios || [];
+        if (!usuarios.find(u => u.rol === 'admin')) {
+            usuarios = [...defaultUsers(), ...usuarios];
+        }
 
         const teamNames = [...new Set(jugadores.map(p => p.equipo))];
         for (const name of teamNames) {
@@ -68,8 +76,21 @@ const AppStore = (function () {
             }
         }
 
-        return { equipos, jugadores, partidos };
+        return { equipos, jugadores, partidos, usuarios };
     }
 
-    return { load, save, reset };
+    function getUsers() {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const data = JSON.parse(saved);
+                const usuarios = data.usuarios || [];
+                if (!usuarios.find(u => u.rol === 'admin')) return [...defaultUsers(), ...usuarios];
+                return usuarios;
+            }
+        } catch (e) { /* ignore */ }
+        return defaultUsers();
+    }
+
+    return { load, save, reset, getUsers };
 })();

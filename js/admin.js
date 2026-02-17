@@ -10,6 +10,7 @@
   let players = [];
   let equipos = [];
   let partidos = [];
+  let usuarios = [];
   let currentView = 'teams';
   let selectedTeam = null;
   let selectedMatchId = null;
@@ -17,8 +18,20 @@
   let pendingPlayerPhoto = '';
   let pendingTeamImage = '';
 
+  // Current logged-in user info
+  function getCurrentUser() {
+    return {
+      id: sessionStorage.getItem('admin_auth_id') || '',
+      rol: sessionStorage.getItem('admin_auth_rol') || 'delegado',
+      equipo: sessionStorage.getItem('admin_auth_equipo') || '',
+      nombre: sessionStorage.getItem('admin_auth_nombre') || ''
+    };
+  }
+  function isAdmin() { return getCurrentUser().rol === 'admin'; }
+  function canEditTeam(teamName) { return isAdmin() || getCurrentUser().equipo === teamName; }
+
   function autoSave() {
-    AppStore.save({ equipos, jugadores: players, partidos });
+    AppStore.save({ equipos, jugadores: players, partidos, usuarios });
   }
 
   async function loadData() {
@@ -26,6 +39,8 @@
     players = data.jugadores;
     equipos = data.equipos;
     partidos = data.partidos || [];
+    usuarios = data.usuarios || [];
+    applyPermissions();
     renderView();
   }
 
@@ -34,25 +49,28 @@
   function renderView() {
     renderStats();
     updateTeamDropdown();
+    updateUserTeamDropdown();
     if (currentView === 'teams') renderTeamShields();
     else if (currentView === 'roster') renderRoster();
     else if (currentView === 'calendar') renderCalendar();
     else if (currentView === 'standings') renderStandings();
     else if (currentView === 'match') renderMatchDetail();
+    else if (currentView === 'users') renderUsers();
   }
 
 
 
   function switchTab(view) {
+    if (view === 'users' && !isAdmin()) return;
     currentView = view;
     selectedTeam = null;
-    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-    // Update active tab visual
+    document.querySelectorAll('.nav-link').forEach(l => {
+      l.classList.remove('active');
+      l.style.color = 'var(--white-muted)';
+    });
     const links = document.querySelectorAll('.nav-link');
-    if (view === 'teams' && links[0]) links[0].classList.add('active');
-    if (view === 'calendar' && links[1]) links[1].classList.add('active');
-    // If standings tab exists (user might need to add it to HTML), highlight it.
-    // Assuming 3rd link is QR or Standings. We will handle HTML update separately.
+    const idx = { teams: 0, calendar: 1, standings: 2, users: 3 }[view];
+    if (links[idx]) { links[idx].classList.add('active'); links[idx].style.color = 'var(--white)'; }
     renderView();
   }
 
@@ -68,9 +86,10 @@
   function updateTeamDropdown() {
     const s = document.getElementById('inp-equipo');
     if (!s) return;
-    s.innerHTML = equipos.length === 0
+    const list = isAdmin() ? equipos : equipos.filter(e => e.nombre === getCurrentUser().equipo);
+    s.innerHTML = list.length === 0
       ? '<option value="">— Crea un equipo —</option>'
-      : equipos.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
+      : list.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
   }
 
   function renderEmblem(team, size) {
@@ -97,10 +116,11 @@
       if (team.email) contactInfo.push(`✉ ${team.email}`);
       if (team.telefono) contactInfo.push(`📞 ${team.telefono}`);
 
+      const canEdit = canEditTeam(team.nombre);
       html += `
         <div class="shield-card" onclick="if(!event.target.closest('.shield-edit-btn')) Admin.selectTeam('${team.nombre.replace(/'/g, "\\'")}')"
              style="--shield-color:${team.color};--shield-bg:${team.colorSecundario || '#1a1a2e'}">
-          <button class="btn btn-sm btn-secondary shield-edit-btn" style="position:absolute;top:10px;right:10px;z-index:10;" onclick="Admin.editTeam('${team.id}')" title="Editar Equipo">✏️</button>
+          ${canEdit ? `<button class="btn btn-sm btn-secondary shield-edit-btn" style="position:absolute;top:10px;right:10px;z-index:10;" onclick="Admin.editTeam('${team.id}')" title="Editar Equipo">✏️</button>` : ''}
           <div class="shield-glow" style="background:radial-gradient(circle,${team.color}15 0%,transparent 70%)"></div>
           <div class="shield-emblem">${renderEmblem(team, '4rem')}</div>
           <h2 class="shield-name">${team.nombre}</h2>
@@ -126,6 +146,7 @@
     const team = equipos.find(e => e.nombre === selectedTeam);
     if (!team) { backToTeams(); return; }
     const tp = getTeamPlayers(team.nombre);
+    const canEdit = canEditTeam(team.nombre);
 
     let html = `<div class="roster-view">
       <div class="roster-header" style="--shield-color:${team.color}">
@@ -134,7 +155,7 @@
           <span class="roster-emblem">${renderEmblem(team, '2.5rem')}</span>
           <div>
             <h2 class="roster-team-name">${team.nombre}
-              <button class="btn btn-sm btn-secondary" onclick="Admin.editTeam('${team.id}')" style="margin-left:8px;font-size:0.8rem;" title="Editar Equipo">✏️</button>
+              ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editTeam('${team.id}')" style="margin-left:8px;font-size:0.8rem;" title="Editar Equipo">✏️</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.exportTeamCSV('${team.nombre}')" style="margin-left:8px;font-size:0.8rem;" title="Exportar Jugadores">⬇️ CSV</button>
             </h2>
             <span class="roster-team-count">${tp.length} jugador${tp.length !== 1 ? 'es' : ''}</span>
@@ -176,8 +197,8 @@
             </div>
             <div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>
             <div class="roster-actions">
-              <button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>
-              <button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>
+              ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>
+              <button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.viewCard('${p.id}')">👁</button>
             </div>
           </div>`;
@@ -1019,6 +1040,135 @@
     renderView();
   }
 
+  // ── PERMISSIONS ──
+  function applyPermissions() {
+    const admin = isAdmin();
+    const user = getCurrentUser();
+    // Show/hide admin-only elements
+    document.querySelectorAll('.admin-only').forEach(el => el.style.display = admin ? '' : 'none');
+    const navUsers = document.getElementById('nav-users');
+    if (navUsers) navUsers.style.display = admin ? '' : 'none';
+    // Show/hide admin action buttons
+    ['btn-add-team', 'btn-import-csv', 'btn-demo', 'btn-reset'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = admin ? '' : 'none';
+    });
+    // For delegado: show add player only (they can add to their team)
+    const btnAddPlayer = document.getElementById('btn-add-player');
+    if (btnAddPlayer) btnAddPlayer.style.display = (admin || user.equipo) ? '' : 'none';
+    // User badge
+    const badge = document.getElementById('current-user-badge');
+    if (badge) badge.textContent = `${user.nombre} (${admin ? 'Admin' : user.equipo || 'Sin equipo'})`;
+  }
+
+  function logout() {
+    sessionStorage.clear();
+    location.reload();
+  }
+
+  // ── USERS CRUD ──
+  function updateUserTeamDropdown() {
+    const s = document.getElementById('usr-equipo');
+    if (!s) return;
+    s.innerHTML = '<option value="">— Sin equipo —</option>' + equipos.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
+  }
+
+  function renderUsers() {
+    if (!isAdmin()) { switchTab('teams'); return; }
+    const c = document.getElementById('main-content');
+    let html = `
+      <div style="max-width:800px;margin:0 auto;animation:fadeIn 0.5s ease;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h2 style="font-family:var(--font-display);color:var(--gold);letter-spacing:2px;">GESTIÓN DE USUARIOS</h2>
+          <button class="btn btn-primary" onclick="Admin.openAddUser()">+ Nuevo Usuario</button>
+        </div>
+        <div style="background:var(--bg-card);border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.05);">
+          <table style="width:100%;border-collapse:collapse;color:var(--white);">
+            <thead>
+              <tr style="background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.1);">
+                <th style="padding:12px 15px;text-align:left;font-size:0.8rem;color:var(--white-muted);">NOMBRE</th>
+                <th style="padding:12px 15px;text-align:left;font-size:0.8rem;color:var(--white-muted);">USUARIO</th>
+                <th style="padding:12px 15px;text-align:center;font-size:0.8rem;color:var(--white-muted);">ROL</th>
+                <th style="padding:12px 15px;text-align:left;font-size:0.8rem;color:var(--white-muted);">EQUIPO</th>
+                <th style="padding:12px 15px;text-align:center;font-size:0.8rem;color:var(--white-muted);">ACCIONES</th>
+              </tr>
+            </thead>
+            <tbody>`;
+    for (const u of usuarios) {
+      const rolBadge = u.rol === 'admin'
+        ? '<span style="background:var(--gold);color:#000;padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;">ADMIN</span>'
+        : '<span style="background:var(--blue-check);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;">DELEGADO</span>';
+      const isMainAdmin = u.id === 'admin';
+      html += `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+          <td style="padding:12px 15px;font-weight:600;">${u.nombre}</td>
+          <td style="padding:12px 15px;color:var(--white-muted);">${u.user}</td>
+          <td style="padding:12px 15px;text-align:center;">${rolBadge}</td>
+          <td style="padding:12px 15px;">${u.equipo || '—'}</td>
+          <td style="padding:12px 15px;text-align:center;">
+            <button class="btn btn-sm btn-secondary" onclick="Admin.editUser('${u.id}')" title="Editar">✏️</button>
+            ${isMainAdmin ? '' : `<button class="btn btn-sm btn-secondary" onclick="Admin.deleteUser('${u.id}')" title="Eliminar" style="color:var(--red);">🗑</button>`}
+          </td>
+        </tr>`;
+    }
+    html += '</tbody></table></div></div>';
+    c.innerHTML = html;
+  }
+
+  function openAddUser() {
+    document.getElementById('usr-id').value = '';
+    document.getElementById('add-user-form').reset();
+    document.getElementById('modal-add-user').querySelector('.modal-title').textContent = '👥 Nuevo Usuario';
+    document.getElementById('modal-add-user').querySelector('button[type="submit"]').textContent = 'Guardar Usuario';
+    updateUserTeamDropdown();
+    openModal('modal-add-user');
+  }
+
+  function editUser(id) {
+    const u = usuarios.find(x => x.id === id);
+    if (!u) return;
+    document.getElementById('usr-id').value = u.id;
+    document.getElementById('usr-nombre').value = u.nombre;
+    document.getElementById('usr-user').value = u.user;
+    document.getElementById('usr-pass').value = u.pass;
+    document.getElementById('usr-rol').value = u.rol;
+    updateUserTeamDropdown();
+    document.getElementById('usr-equipo').value = u.equipo || '';
+    document.getElementById('modal-add-user').querySelector('.modal-title').textContent = 'Editar Usuario';
+    document.getElementById('modal-add-user').querySelector('button[type="submit"]').textContent = 'Guardar Cambios';
+    openModal('modal-add-user');
+  }
+
+  function saveUser(e) {
+    e.preventDefault();
+    const id = document.getElementById('usr-id').value;
+    const nombre = document.getElementById('usr-nombre').value.trim();
+    const user = document.getElementById('usr-user').value.trim();
+    const pass = document.getElementById('usr-pass').value;
+    const rol = document.getElementById('usr-rol').value;
+    const equipo = document.getElementById('usr-equipo').value || null;
+    if (!nombre || !user || !pass) return;
+
+    // Check duplicate username
+    const dup = usuarios.find(u => u.user === user && u.id !== id);
+    if (dup) { alert('Ya existe un usuario con ese nombre de usuario.'); return; }
+
+    if (id) {
+      const u = usuarios.find(x => x.id === id);
+      if (u) { u.nombre = nombre; u.user = user; u.pass = pass; u.rol = rol; u.equipo = equipo; }
+    } else {
+      usuarios.push({ id: 'u-' + Date.now(), nombre, user, pass, rol, equipo });
+    }
+    autoSave(); closeModal('modal-add-user'); renderView();
+  }
+
+  function deleteUser(id) {
+    if (id === 'admin') return;
+    if (!confirm('¿Eliminar este usuario?')) return;
+    usuarios = usuarios.filter(u => u.id !== id);
+    autoSave(); renderView();
+  }
+
   // ── MODALS ──
   function openModal(id) { document.getElementById(id).classList.add('active'); }
   function closeModal(id) { document.getElementById(id).classList.remove('active'); }
@@ -1038,6 +1188,7 @@
     document.getElementById('btn-download-template').addEventListener('click', downloadCSVTemplate);
     document.getElementById('inp-foto').addEventListener('change', handlePlayerPhotoChange);
     document.getElementById('team-imagen').addEventListener('change', handleTeamImageChange);
+    document.getElementById('add-user-form').addEventListener('submit', saveUser);
     document.querySelectorAll('.modal-overlay').forEach(o => {
       o.addEventListener('click', function (e) { if (e.target === this) closeModal(this.id); });
     });
@@ -1128,6 +1279,15 @@
     exportTeamCSV,
     resetData,
     generateDemoData,
+
+    // User management
+    applyPermissions,
+    logout,
+    renderUsers,
+    openAddUser,
+    editUser,
+    saveUser,
+    deleteUser,
 
     // Legacy aliases
     toggleStats: renderStats

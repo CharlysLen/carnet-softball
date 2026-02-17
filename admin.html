@@ -52,7 +52,14 @@
                     style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">📅 CALENDARIO</a>
                 <a href="#" class="nav-link" onclick="Admin.switchTab('standings')"
                     style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">🏆 CLASIFICACIÓN</a>
+                <a href="#" class="nav-link admin-only" id="nav-users" onclick="Admin.switchTab('users')"
+                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;display:none;">👥 USUARIOS</a>
             </nav>
+
+            <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+                <span id="current-user-badge" style="font-size:0.75rem;color:var(--white-muted);"></span>
+                <button class="btn btn-secondary" id="btn-logout" style="font-size:0.75rem;padding:6px 12px;" onclick="Admin.logout()">Salir</button>
+            </div>
 
             <div class="admin-actions">
                 <button class="btn btn-secondary" id="btn-add-team">🛡 Nuevo Equipo</button>
@@ -259,32 +266,81 @@
         </div>
     </div>
 
+    <!-- Add/Edit User Modal -->
+    <div class="modal-overlay" id="modal-add-user">
+        <div class="modal">
+            <h2 class="modal-title">👥 Nuevo Usuario</h2>
+            <form id="add-user-form">
+                <div class="form-group">
+                    <label class="form-label" for="usr-nombre">Nombre Completo</label>
+                    <input class="form-input" type="text" id="usr-nombre" required placeholder="Carlos López">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="usr-user">Usuario</label>
+                        <input class="form-input" type="text" id="usr-user" required placeholder="carlos">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="usr-pass">Contraseña</label>
+                        <input class="form-input" type="text" id="usr-pass" required placeholder="1234">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label" for="usr-rol">Rol</label>
+                        <select class="form-select" id="usr-rol">
+                            <option value="delegado">Delegado de Equipo</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="usr-equipo">Equipo Asignado</label>
+                        <select class="form-select" id="usr-equipo"></select>
+                    </div>
+                </div>
+                <input type="hidden" id="usr-id">
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="Admin.closeModal('modal-add-user')">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar Usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     </div><!-- /admin-panel -->
 
     <script src="js/storage.js"></script>
     <script src="js/admin.js"></script>
     <script>
     (function() {
-        const CREDS = { user: 'admin', pass: '1234' };
         const loginScreen = document.getElementById('login-screen');
         const adminPanel = document.getElementById('admin-panel');
         const loginForm = document.getElementById('login-form');
         const loginError = document.getElementById('login-error');
 
-        // Check if already logged in this session
-        if (sessionStorage.getItem('admin_auth') === 'ok') {
+        function showAdmin() {
             loginScreen.style.display = 'none';
             adminPanel.style.display = 'block';
+        }
+
+        // Check if already logged in this session
+        if (sessionStorage.getItem('admin_auth_id')) {
+            showAdmin();
         }
 
         loginForm.addEventListener('submit', function(e) {
             e.preventDefault();
             const user = document.getElementById('login-user').value.trim();
             const pass = document.getElementById('login-pass').value;
-            if (user === CREDS.user && pass === CREDS.pass) {
-                sessionStorage.setItem('admin_auth', 'ok');
-                loginScreen.style.display = 'none';
-                adminPanel.style.display = 'block';
+            const usuarios = AppStore.getUsers();
+            const found = usuarios.find(u => u.user === user && u.pass === pass);
+            if (found) {
+                sessionStorage.setItem('admin_auth_id', found.id);
+                sessionStorage.setItem('admin_auth_rol', found.rol);
+                sessionStorage.setItem('admin_auth_equipo', found.equipo || '');
+                sessionStorage.setItem('admin_auth_nombre', found.nombre);
+                showAdmin();
+                if (typeof Admin !== 'undefined' && Admin.applyPermissions) Admin.applyPermissions();
             } else {
                 loginError.style.display = 'block';
                 document.getElementById('login-pass').value = '';
