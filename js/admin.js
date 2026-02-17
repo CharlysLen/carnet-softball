@@ -28,7 +28,15 @@
     };
   }
   function isAdmin() { return getCurrentUser().rol === 'admin'; }
-  function canEditTeam(teamName) { return isAdmin() || getCurrentUser().equipo === teamName; }
+  function isSuperuser() { return getCurrentUser().rol === 'superusuario'; }
+  function isDelegado() { return getCurrentUser().rol === 'delegado'; }
+  function isUsuario() { return getCurrentUser().rol === 'usuario'; }
+  // Admin & Superusuario can edit any team; Delegado only their own
+  function canEditTeam(teamName) { return isAdmin() || isSuperuser() || getCurrentUser().equipo === teamName; }
+  // Only Admin & Superusuario can toggle estado/verificado
+  function canToggleStatus() { return isAdmin() || isSuperuser(); }
+  // Admin & Superusuario can manage teams (create/edit/delete)
+  function canManageTeams() { return isAdmin() || isSuperuser(); }
 
   function autoSave() {
     AppStore.save({ equipos, jugadores: players, partidos, usuarios });
@@ -62,6 +70,7 @@
 
   function switchTab(view) {
     if (view === 'users' && !isAdmin()) return;
+    if (isUsuario()) return;
     currentView = view;
     selectedTeam = null;
     document.querySelectorAll('.nav-link').forEach(l => {
@@ -86,7 +95,7 @@
   function updateTeamDropdown() {
     const s = document.getElementById('inp-equipo');
     if (!s) return;
-    const list = isAdmin() ? equipos : equipos.filter(e => e.nombre === getCurrentUser().equipo);
+    const list = (isAdmin() || isSuperuser()) ? equipos : equipos.filter(e => e.nombre === getCurrentUser().equipo);
     s.innerHTML = list.length === 0
       ? '<option value="">— Crea un equipo —</option>'
       : list.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
@@ -120,7 +129,7 @@
       html += `
         <div class="shield-card" onclick="if(!event.target.closest('.shield-edit-btn')) Admin.selectTeam('${team.nombre.replace(/'/g, "\\'")}')"
              style="--shield-color:${team.color};--shield-bg:${team.colorSecundario || '#1a1a2e'}">
-          ${canEdit ? `<div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:4px;">
+          ${canManageTeams() ? `<div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:4px;">
             <button class="btn btn-sm btn-secondary shield-edit-btn" onclick="Admin.editTeam('${team.id}')" title="Editar Equipo">✏️</button>
             ${isAdmin() ? `<button class="btn btn-sm btn-danger shield-edit-btn" onclick="Admin.deleteTeam('${team.id}')" title="Borrar Equipo">🗑</button>` : ''}
           </div>` : ''}
@@ -158,7 +167,7 @@
           <span class="roster-emblem">${renderEmblem(team, '2.5rem')}</span>
           <div>
             <h2 class="roster-team-name">${team.nombre}
-              ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editTeam('${team.id}')" style="margin-left:8px;font-size:0.8rem;" title="Editar Equipo">✏️</button>` : ''}
+              ${canManageTeams() ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editTeam('${team.id}')" style="margin-left:8px;font-size:0.8rem;" title="Editar Equipo">✏️</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.exportTeamCSV('${team.nombre}')" style="margin-left:8px;font-size:0.8rem;" title="Exportar Jugadores">⬇️ CSV</button>
             </h2>
             <span class="roster-team-count">${tp.length} jugador${tp.length !== 1 ? 'es' : ''}</span>
@@ -201,8 +210,8 @@
             </div>
             <div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>
             <div class="roster-actions">
-              ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>
-              <button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
+              ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>` : ''}
+              ${canToggleStatus() ? `<button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.viewCard('${p.id}')">👁</button>
             </div>
           </div>`;
@@ -355,6 +364,15 @@
     }
     document.getElementById('inp-foto').value = '';
 
+    // Restrict fields for delegado
+    const restricted = isDelegado();
+    ['inp-estado', 'inp-verificado'].forEach(id => {
+      document.getElementById(id).disabled = restricted;
+    });
+    ['inp-avg', 'inp-hr', 'inp-rbi', 'inp-h', 'inp-ab', 'inp-r'].forEach(id => {
+      document.getElementById(id).disabled = restricted;
+    });
+
     openModal('modal-add-player');
   }
 
@@ -500,6 +518,10 @@
     document.getElementById('add-player-form').reset();
     document.getElementById('foto-preview').style.display = 'none';
     pendingPlayerPhoto = '';
+    // Re-enable fields that may have been disabled for delegado
+    ['inp-estado', 'inp-verificado', 'inp-avg', 'inp-hr', 'inp-rbi', 'inp-h', 'inp-ab', 'inp-r'].forEach(id => {
+      document.getElementById(id).disabled = isDelegado();
+    });
   }
 
   // ── CSV ──
@@ -1084,22 +1106,48 @@
   // ── PERMISSIONS ──
   function applyPermissions() {
     const admin = isAdmin();
+    const superuser = isSuperuser();
+    const delegado = isDelegado();
+    const usuario = isUsuario();
     const user = getCurrentUser();
+
+    // Usuario (jugador) → redirect to their card
+    if (usuario) {
+      const playerId = user.jugadorId || null;
+      if (playerId) {
+        window.location.href = `index.html?id=${playerId}`;
+      } else {
+        document.getElementById('main-content').innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:60px 20px;">
+          <div style="font-size:3rem;margin-bottom:16px;">🥎</div>
+          <p>Tu cuenta de jugador no tiene una ficha asociada.</p>
+          <p style="font-size:0.8rem;margin-top:8px;">Contacta al administrador.</p></div>`;
+      }
+      return;
+    }
+
     // Show/hide admin-only elements
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = admin ? '' : 'none');
     const navUsers = document.getElementById('nav-users');
     if (navUsers) navUsers.style.display = admin ? '' : 'none';
-    // Show/hide admin action buttons
+
+    // Team management buttons: admin & superusuario
     ['btn-add-team', 'btn-import-csv', 'btn-demo', 'btn-reset'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) el.style.display = admin ? '' : 'none';
+      if (el) el.style.display = (admin || (superuser && id !== 'btn-reset' && id !== 'btn-demo')) ? '' : 'none';
     });
-    // For delegado: show add player only (they can add to their team)
+
+    // Add player: admin, superusuario, delegado (own team)
     const btnAddPlayer = document.getElementById('btn-add-player');
-    if (btnAddPlayer) btnAddPlayer.style.display = (admin || user.equipo) ? '' : 'none';
-    // User badge
+    if (btnAddPlayer) btnAddPlayer.style.display = (admin || superuser || (delegado && user.equipo)) ? '' : 'none';
+
+    // Export JSON: admin & superusuario
+    const btnExport = document.getElementById('btn-export');
+    if (btnExport) btnExport.style.display = (admin || superuser) ? '' : 'none';
+
+    // User badge with role label
+    const roleLabels = { admin: 'Admin', superusuario: 'Superusuario', delegado: 'Delegado', usuario: 'Jugador' };
     const badge = document.getElementById('current-user-badge');
-    if (badge) badge.textContent = `${user.nombre} (${admin ? 'Admin' : user.equipo || 'Sin equipo'})`;
+    if (badge) badge.textContent = `${user.nombre} (${roleLabels[user.rol] || user.rol}${delegado ? ' · ' + (user.equipo || 'Sin equipo') : ''})`;
   }
 
   function logout() {
@@ -1136,9 +1184,14 @@
             </thead>
             <tbody>`;
     for (const u of usuarios) {
-      const rolBadge = u.rol === 'admin'
-        ? '<span style="background:var(--gold);color:#000;padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;">ADMIN</span>'
-        : '<span style="background:var(--blue-check);color:#fff;padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;">DELEGADO</span>';
+      const rolStyles = {
+        admin: 'background:var(--gold);color:#000;',
+        superusuario: 'background:#9c27b0;color:#fff;',
+        delegado: 'background:var(--blue-check);color:#fff;',
+        usuario: 'background:var(--green);color:#000;'
+      };
+      const rolNames = { admin: 'ADMIN', superusuario: 'SUPER', delegado: 'DELEGADO', usuario: 'JUGADOR' };
+      const rolBadge = `<span style="${rolStyles[u.rol] || rolStyles.delegado}padding:2px 8px;border-radius:4px;font-size:0.7rem;font-weight:700;">${rolNames[u.rol] || u.rol.toUpperCase()}</span>`;
       const isMainAdmin = u.id === 'admin';
       html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
