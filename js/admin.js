@@ -1135,6 +1135,10 @@
       // Export JSON: admin & superusuario
       const btnExport = document.getElementById('btn-export');
       if (btnExport) btnExport.style.display = (admin || superuser) ? '' : 'none';
+
+      // QR codes: admin, superusuario, delegado
+      const btnQR = document.getElementById('btn-qr');
+      if (btnQR) btnQR.style.display = (admin || superuser || delegado) ? '' : 'none';
     }
 
     // User badge with role label
