@@ -120,7 +120,10 @@
       html += `
         <div class="shield-card" onclick="if(!event.target.closest('.shield-edit-btn')) Admin.selectTeam('${team.nombre.replace(/'/g, "\\'")}')"
              style="--shield-color:${team.color};--shield-bg:${team.colorSecundario || '#1a1a2e'}">
-          ${canEdit ? `<button class="btn btn-sm btn-secondary shield-edit-btn" style="position:absolute;top:10px;right:10px;z-index:10;" onclick="Admin.editTeam('${team.id}')" title="Editar Equipo">✏️</button>` : ''}
+          ${canEdit ? `<div style="position:absolute;top:10px;right:10px;z-index:10;display:flex;gap:4px;">
+            <button class="btn btn-sm btn-secondary shield-edit-btn" onclick="Admin.editTeam('${team.id}')" title="Editar Equipo">✏️</button>
+            ${isAdmin() ? `<button class="btn btn-sm btn-danger shield-edit-btn" onclick="Admin.deleteTeam('${team.id}')" title="Borrar Equipo">🗑</button>` : ''}
+          </div>` : ''}
           <div class="shield-glow" style="background:radial-gradient(circle,${team.color}15 0%,transparent 70%)"></div>
           <div class="shield-emblem">${renderEmblem(team, '4rem')}</div>
           <h2 class="shield-name">${team.nombre}</h2>
@@ -285,6 +288,31 @@
     document.getElementById('team-imagen').value = ''; // Reset file input
 
     openModal('modal-add-team');
+  }
+
+  // ── DELETE TEAM ──
+  function deleteTeam(id) {
+    const team = equipos.find(e => e.id === id);
+    if (!team) return;
+    const tp = getTeamPlayers(team.nombre);
+
+    if (tp.length > 0) {
+      const choice = confirm(`El equipo "${team.nombre}" tiene ${tp.length} jugador(es).\n\n¿Quieres borrar también los jugadores?\n\n- Aceptar = Borrar equipo Y jugadores\n- Cancelar = No borrar nada`);
+      if (!choice) {
+        const keepTeam = confirm(`¿Quieres borrar SOLO el equipo y dejar los jugadores sin equipo?`);
+        if (!keepTeam) return;
+        // Remove team only, players stay with orphaned team name
+      } else {
+        // Delete players too
+        players = players.filter(p => p.equipo !== team.nombre);
+      }
+    } else {
+      if (!confirm(`¿Borrar el equipo "${team.nombre}"?`)) return;
+    }
+
+    equipos = equipos.filter(e => e.id !== id);
+    autoSave();
+    renderView();
   }
 
   // ── EDIT PLAYER ──
@@ -1400,6 +1428,7 @@
 
     // Edit functions
     editTeam,
+    deleteTeam,
     editPlayer,
     savePlayer,
     saveTeam,
