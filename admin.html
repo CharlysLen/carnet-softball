@@ -13,6 +13,30 @@
 
 <body class="admin-body">
 
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-overlay">
+        <div class="login-card">
+            <div style="font-size:3rem;margin-bottom:10px;">🥎</div>
+            <h1 class="login-title">PANEL DE ADMINISTRACIÓN</h1>
+            <p class="login-subtitle">Liga Softball Masters +40</p>
+            <form id="login-form" autocomplete="off">
+                <div class="form-group">
+                    <label class="form-label" for="login-user">Usuario</label>
+                    <input class="form-input" type="text" id="login-user" required placeholder="Usuario" autofocus>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="login-pass">Contraseña</label>
+                    <input class="form-input" type="password" id="login-pass" required placeholder="Contraseña">
+                </div>
+                <div id="login-error" style="color:var(--red);font-size:0.8rem;margin-bottom:12px;display:none;">Usuario o contraseña incorrectos</div>
+                <button type="submit" class="btn btn-primary" style="width:100%;padding:14px;font-size:1rem;">Entrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Admin Panel (hidden until login) -->
+    <div id="admin-panel" style="display:none;">
+
     <header class="admin-header">
 
         <div class="admin-header-inner">
@@ -235,8 +259,40 @@
         </div>
     </div>
 
+    </div><!-- /admin-panel -->
+
     <script src="js/storage.js"></script>
     <script src="js/admin.js"></script>
+    <script>
+    (function() {
+        const CREDS = { user: 'admin', pass: '1234' };
+        const loginScreen = document.getElementById('login-screen');
+        const adminPanel = document.getElementById('admin-panel');
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+
+        // Check if already logged in this session
+        if (sessionStorage.getItem('admin_auth') === 'ok') {
+            loginScreen.style.display = 'none';
+            adminPanel.style.display = 'block';
+        }
+
+        loginForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-user').value.trim();
+            const pass = document.getElementById('login-pass').value;
+            if (user === CREDS.user && pass === CREDS.pass) {
+                sessionStorage.setItem('admin_auth', 'ok');
+                loginScreen.style.display = 'none';
+                adminPanel.style.display = 'block';
+            } else {
+                loginError.style.display = 'block';
+                document.getElementById('login-pass').value = '';
+                document.getElementById('login-pass').focus();
+            }
+        });
+    })();
+    </script>
 </body>
 
 </html>

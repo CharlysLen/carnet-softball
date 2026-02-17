@@ -3,6 +3,33 @@
    Trading Card System — Mobile First
    ============================================ */
 
+/* === LOGIN SCREEN === */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: var(--bg-dark);
+  display: flex; align-items: center; justify-content: center;
+}
+.login-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 20px;
+  padding: 40px 36px;
+  width: 100%; max-width: 380px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.login-title {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.3rem; letter-spacing: 3px;
+  color: var(--gold); margin: 10px 0 4px;
+}
+.login-subtitle {
+  font-size: 0.8rem; color: rgba(255,255,255,0.4);
+  margin-bottom: 28px;
+}
+.login-card .form-group { text-align: left; margin-bottom: 16px; }
+.login-card .form-input { width: 100%; box-sizing: border-box; }
+
 /* === GOOGLE FONTS === */
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap');
 
