@@ -61,7 +61,17 @@
             return;
         }
 
-        const teams = groupByTeam(players);
+        // Filter by team if delegado
+        const rol = sessionStorage.getItem('admin_auth_rol');
+        const userEquipo = sessionStorage.getItem('admin_auth_equipo');
+        const filteredPlayers = (rol === 'delegado' && userEquipo) ? players.filter(p => p.equipo === userEquipo) : players;
+
+        if (filteredPlayers.length === 0) {
+            grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:rgba(255,255,255,0.4);">No hay jugadores en tu equipo.</div>';
+            return;
+        }
+
+        const teams = groupByTeam(filteredPlayers);
         for (const [teamName, teamPlayers] of Object.entries(teams)) {
             const team = findTeam(teamName);
 
