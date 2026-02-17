@@ -31,8 +31,8 @@
   function isSuperuser() { return getCurrentUser().rol === 'superusuario'; }
   function isDelegado() { return getCurrentUser().rol === 'delegado'; }
   function isUsuario() { return getCurrentUser().rol === 'usuario'; }
-  // Admin & Superusuario can edit any team; Delegado only their own
-  function canEditTeam(teamName) { return isAdmin() || isSuperuser() || getCurrentUser().equipo === teamName; }
+  // Admin & Superusuario can edit any team; Delegado only their own; Usuario can't edit
+  function canEditTeam(teamName) { if (isUsuario()) return false; return isAdmin() || isSuperuser() || getCurrentUser().equipo === teamName; }
   // Only Admin & Superusuario can toggle estado/verificado
   function canToggleStatus() { return isAdmin() || isSuperuser(); }
   // Admin & Superusuario can manage teams (create/edit/delete)
@@ -70,7 +70,6 @@
 
   function switchTab(view) {
     if (view === 'users' && !isAdmin()) return;
-    if (isUsuario()) return;
     currentView = view;
     selectedTeam = null;
     document.querySelectorAll('.nav-link').forEach(l => {
@@ -1111,43 +1110,45 @@
     const usuario = isUsuario();
     const user = getCurrentUser();
 
-    // Usuario (jugador) → redirect to their card
-    if (usuario) {
-      const playerId = user.jugadorId || null;
-      if (playerId) {
-        window.location.href = `index.html?id=${playerId}`;
-      } else {
-        document.getElementById('main-content').innerHTML = `<div style="text-align:center;color:rgba(255,255,255,0.4);padding:60px 20px;">
-          <div style="font-size:3rem;margin-bottom:16px;">🥎</div>
-          <p>Tu cuenta de jugador no tiene una ficha asociada.</p>
-          <p style="font-size:0.8rem;margin-top:8px;">Contacta al administrador.</p></div>`;
-      }
-      return;
-    }
-
     // Show/hide admin-only elements
     document.querySelectorAll('.admin-only').forEach(el => el.style.display = admin ? '' : 'none');
     const navUsers = document.getElementById('nav-users');
     if (navUsers) navUsers.style.display = admin ? '' : 'none';
 
-    // Team management buttons: admin & superusuario
-    ['btn-add-team', 'btn-import-csv', 'btn-demo', 'btn-reset'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.style.display = (admin || (superuser && id !== 'btn-reset' && id !== 'btn-demo')) ? '' : 'none';
-    });
+    // Usuario (jugador): read-only — hide ALL action buttons, can browse everything
+    if (usuario) {
+      ['btn-add-team', 'btn-add-player', 'btn-import-csv', 'btn-export', 'btn-demo', 'btn-reset', 'btn-qr'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+    } else {
+      // Team management buttons: admin & superusuario
+      ['btn-add-team', 'btn-import-csv', 'btn-demo', 'btn-reset'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (admin || (superuser && id !== 'btn-reset' && id !== 'btn-demo')) ? '' : 'none';
+      });
 
-    // Add player: admin, superusuario, delegado (own team)
-    const btnAddPlayer = document.getElementById('btn-add-player');
-    if (btnAddPlayer) btnAddPlayer.style.display = (admin || superuser || (delegado && user.equipo)) ? '' : 'none';
+      // Add player: admin, superusuario, delegado (own team)
+      const btnAddPlayer = document.getElementById('btn-add-player');
+      if (btnAddPlayer) btnAddPlayer.style.display = (admin || superuser || (delegado && user.equipo)) ? '' : 'none';
 
-    // Export JSON: admin & superusuario
-    const btnExport = document.getElementById('btn-export');
-    if (btnExport) btnExport.style.display = (admin || superuser) ? '' : 'none';
+      // Export JSON: admin & superusuario
+      const btnExport = document.getElementById('btn-export');
+      if (btnExport) btnExport.style.display = (admin || superuser) ? '' : 'none';
+    }
 
     // User badge with role label
     const roleLabels = { admin: 'Admin', superusuario: 'Superusuario', delegado: 'Delegado', usuario: 'Jugador' };
     const badge = document.getElementById('current-user-badge');
-    if (badge) badge.textContent = `${user.nombre} (${roleLabels[user.rol] || user.rol}${delegado ? ' · ' + (user.equipo || 'Sin equipo') : ''})`;
+    if (badge) badge.textContent = `${user.nombre} (${roleLabels[user.rol] || user.rol}${(delegado || usuario) ? ' · ' + (user.equipo || 'Sin equipo') : ''})`;
+
+    // Change panel title for non-admin roles
+    const titleEl = document.querySelector('.admin-title');
+    if (titleEl) {
+      if (usuario) titleEl.textContent = '🥎 Liga Softball Masters +40';
+      else if (delegado) titleEl.textContent = '🥎 Panel de Delegado';
+      else if (superuser) titleEl.textContent = '🥎 Panel de Gestión';
+    }
   }
 
   function logout() {
