@@ -32,7 +32,20 @@
   function isDelegado() { return getCurrentUser().rol === 'delegado'; }
   function isUsuario() { return getCurrentUser().rol === 'usuario'; }
   // Admin & Superusuario can edit any team; Delegado only their own; Usuario can't edit
-  function canEditTeam(teamName) { if (isUsuario()) return false; return isAdmin() || isSuperuser() || getCurrentUser().equipo === teamName; }
+  function getDelegadoTeam() {
+    const u = getCurrentUser();
+    if (!u.equipo) return null;
+    // Match by nombre or id (case-insensitive) for robustness
+    return equipos.find(e => e.nombre === u.equipo || e.id === u.equipo ||
+      e.nombre.toLowerCase() === u.equipo.toLowerCase() || e.id.toLowerCase() === u.equipo.toLowerCase());
+  }
+  function canEditTeam(teamName) {
+    if (isUsuario()) return false;
+    if (isAdmin() || isSuperuser()) return true;
+    if (!isDelegado()) return false;
+    const dt = getDelegadoTeam();
+    return dt && (dt.nombre === teamName || dt.id === teamName);
+  }
   // Only Admin & Superusuario can toggle estado/verificado
   function canToggleStatus() { return isAdmin() || isSuperuser(); }
   // Admin & Superusuario can manage teams (create/edit/delete)
@@ -154,9 +167,10 @@
     const container = s.closest('.form-group') || s.parentElement;
     if (isDelegado()) {
       // Delegado: auto-assign their team, hide the dropdown
-      const userTeam = getCurrentUser().equipo;
-      s.innerHTML = `<option value="${userTeam}">${userTeam}</option>`;
-      s.value = userTeam;
+      const dt = getDelegadoTeam();
+      const teamName = dt ? dt.nombre : getCurrentUser().equipo;
+      s.innerHTML = `<option value="${teamName}">${dt ? (dt.escudo || '🥎') + ' ' : ''}${teamName}</option>`;
+      s.value = teamName;
       container.style.display = 'none';
     } else {
       container.style.display = '';
@@ -1300,9 +1314,9 @@
         if (el) el.style.display = (admin || (superuser && id !== 'btn-reset' && id !== 'btn-demo')) ? '' : 'none';
       });
 
-      // Add player: admin, superusuario, delegado (own team)
+      // Add player: admin, superusuario, delegado (always - their team auto-assigned)
       const btnAddPlayer = document.getElementById('btn-add-player');
-      if (btnAddPlayer) btnAddPlayer.style.display = (admin || superuser || (delegado && user.equipo)) ? '' : 'none';
+      if (btnAddPlayer) btnAddPlayer.style.display = (admin || superuser || delegado) ? '' : 'none';
 
       // Export JSON: admin & superusuario
       const btnExport = document.getElementById('btn-export');
