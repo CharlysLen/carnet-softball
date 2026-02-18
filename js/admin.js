@@ -1863,12 +1863,16 @@
     const pid = playerId;
 
     const isStarter = entry.starter !== false;
+    const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Utility'];
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${entry.order}</span>
           <span style="font-weight:700;font-size:1rem;">${p.nombre}</span>
-          <span style="font-size:0.75rem;color:var(--white-muted);">(${shortenPosition(entry.position)})</span>
+          <select onchange="Admin.setLineupPosition('${mid}','${tn}','${pid}',this.value)"
+            style="padding:3px 6px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--gold);border:1px solid rgba(245,166,35,0.3);border-radius:6px;font-weight:600;">
+            ${ALL_POSITIONS.map(pos => `<option value="${pos}" ${entry.position === pos ? 'selected' : ''}>${shortenPosition(pos)}</option>`).join('')}
+          </select>
           <span style="font-size:0.6rem;padding:2px 8px;border-radius:10px;font-weight:600;${isStarter ? 'background:rgba(0,230,118,0.15);color:var(--green);' : 'background:rgba(255,255,255,0.08);color:var(--white-muted);'}">${isStarter ? 'Titular' : 'Suplente'}</span>
         </div>
         <div style="display:flex;gap:4px;">
@@ -1988,6 +1992,16 @@
     return (pos || '').replace('Primera Base','1B').replace('Segunda Base','2B').replace('Tercera Base','3B')
       .replace('Left Field','LF').replace('Center Field','CF').replace('Right Field','RF')
       .replace('Shortfield','SF').replace('Shortstop','SS');
+  }
+
+  function setLineupPosition(matchId, teamName, playerId, position) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const entry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!entry) return;
+    entry.position = position;
+    autoSave();
+    renderView();
   }
 
   function toggleStarter(matchId, teamName, playerId) {
@@ -2377,6 +2391,7 @@
     movePlayerInLineup,
     selectLineupPlayer,
     toggleStarter,
+    setLineupPosition,
     renderLineupList,
 
     // Legacy aliases
