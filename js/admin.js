@@ -1767,7 +1767,7 @@
     const tp = players.filter(p => p.equipo === teamName && p.aprobado !== false);
     if (tp.length === 0) { alert('No hay jugadores aprobados en ' + teamName); return; }
     m.lineup[teamName] = tp.map((p, i) => ({
-      playerId: p.id, order: i + 1, position: p.posicion, starter: true,
+      playerId: p.id, order: i + 1, position: p.posicion, status: 'suplente',
       turns: [], defense: { outs: 0, errors: 0, assists: 0 }
     }));
     autoSave();
@@ -1862,7 +1862,13 @@
     const tn = teamName.replace(/'/g, "\\'");
     const pid = playerId;
 
-    const isStarter = entry.starter !== false;
+    const st = entry.status || (entry.starter === false ? 'suplente' : entry.starter === 'ausente' ? 'ausente' : 'titular');
+    const STATUS_STYLES = {
+      titular: { bg: 'rgba(0,230,118,0.15)', color: 'var(--green)', label: 'Titular', icon: '⚾', next: 'suplente', nextLabel: 'Suplente' },
+      suplente: { bg: 'rgba(255,255,255,0.08)', color: 'var(--white-muted)', label: 'Suplente', icon: '📋', next: 'ausente', nextLabel: 'Ausente' },
+      ausente: { bg: 'rgba(244,67,54,0.15)', color: 'var(--red)', label: 'Ausente', icon: '❌', next: 'titular', nextLabel: 'Titular' }
+    };
+    const stStyle = STATUS_STYLES[st] || STATUS_STYLES.suplente;
     const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Utility'];
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
@@ -1873,10 +1879,10 @@
             style="padding:3px 6px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--gold);border:1px solid rgba(245,166,35,0.3);border-radius:6px;font-weight:600;">
             ${ALL_POSITIONS.map(pos => `<option value="${pos}" ${entry.position === pos ? 'selected' : ''}>${shortenPosition(pos)}</option>`).join('')}
           </select>
-          <span style="font-size:0.6rem;padding:2px 8px;border-radius:10px;font-weight:600;${isStarter ? 'background:rgba(0,230,118,0.15);color:var(--green);' : 'background:rgba(255,255,255,0.08);color:var(--white-muted);'}">${isStarter ? 'Titular' : 'Suplente'}</span>
+          <span style="font-size:0.6rem;padding:2px 8px;border-radius:10px;font-weight:600;background:${stStyle.bg};color:${stStyle.color};">${stStyle.label}</span>
         </div>
         <div style="display:flex;gap:4px;">
-          <button class="btn btn-sm ${isStarter ? 'btn-secondary' : 'btn-success'}" onclick="Admin.toggleStarter('${mid}','${tn}','${pid}')" title="${isStarter ? 'Mover a suplente' : 'Poner de titular'}">${isStarter ? '📋' : '⚾'}</button>
+          <button class="btn btn-sm btn-secondary" onclick="Admin.cycleStatus('${mid}','${tn}','${pid}')" title="Cambiar a ${stStyle.nextLabel}">${stStyle.icon}</button>
           <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','up')" title="Subir">▲</button>
           <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','down')" title="Bajar">▼</button>
           <button class="btn btn-sm btn-danger" onclick="Admin.removePlayerFromLineup('${mid}','${tn}','${pid}')" title="Quitar">✕</button>
@@ -1944,7 +1950,7 @@
     if (!p) return;
     const maxOrder = m.lineup[teamName].reduce((mx, e) => Math.max(mx, e.order), 0);
     m.lineup[teamName].push({
-      playerId: p.id, order: maxOrder + 1, position: p.posicion, starter: false,
+      playerId: p.id, order: maxOrder + 1, position: p.posicion, status: 'suplente',
       turns: [], defense: { outs: 0, errors: 0, assists: 0 }
     });
     autoSave(); renderView();
@@ -2004,12 +2010,15 @@
     renderView();
   }
 
-  function toggleStarter(matchId, teamName, playerId) {
+  function cycleStatus(matchId, teamName, playerId) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
-    entry.starter = entry.starter === false ? true : (entry.starter === undefined ? false : !entry.starter);
+    const cur = entry.status || (entry.starter === false ? 'suplente' : 'titular');
+    const order = { titular: 'suplente', suplente: 'ausente', ausente: 'titular' };
+    entry.status = order[cur] || 'suplente';
+    delete entry.starter; // migrate away from old field
     autoSave();
     renderView();
   }
@@ -2018,9 +2027,11 @@
     const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
     if (lineup.length === 0) return '';
 
-    // Only starters on the field (default: all are starters if not explicitly set)
-    const starters = lineup.filter(e => e.starter !== false);
-    const subs = lineup.filter(e => e.starter === false);
+    // Helper to resolve status (backward compat with old starter boolean)
+    const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
+    const starters = lineup.filter(e => getStatus(e) === 'titular');
+    const subs = lineup.filter(e => getStatus(e) === 'suplente');
+    const ausentes = lineup.filter(e => getStatus(e) === 'ausente');
     const canEdit = canEditTeam(teamName);
     const mid = match.id;
     const tn = teamName.replace(/'/g, "\\'");
@@ -2096,6 +2107,28 @@
       html += `</div></div>`;
     }
 
+    // Ausentes section
+    if (ausentes.length > 0) {
+      html += `<div style="margin:0 auto 16px;max-width:500px;background:rgba(244,67,54,0.04);border-radius:10px;padding:8px 12px;border:1px solid rgba(244,67,54,0.1);">
+        <div style="font-size:0.7rem;color:var(--red);margin-bottom:6px;font-weight:600;letter-spacing:1px;">AUSENTES (${ausentes.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+      for (const entry of ausentes) {
+        const p = players.find(x => x.id === entry.playerId);
+        if (!p) continue;
+        const photo = p.foto
+          ? `<img src="${p.foto}" style="width:24px;height:24px;object-fit:cover;border-radius:50%;filter:grayscale(100%);opacity:0.5;">`
+          : `<span style="font-size:0.55rem;font-weight:700;opacity:0.4;">${p.nombre.charAt(0)}</span>`;
+        const isSelected = selectedLineupPlayerId === entry.playerId;
+        html += `<div onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;cursor:pointer;background:${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.02)'};border:1px solid ${isSelected ? 'rgba(245,166,35,0.3)' : 'rgba(255,255,255,0.03)'};opacity:0.6;">
+          <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;background:var(--bg-card);display:flex;align-items:center;justify-content:center;">${photo}</div>
+          <div>
+            <div style="font-size:0.7rem;font-weight:600;${isSelected ? 'color:var(--gold);' : 'color:var(--white-muted);'}">${p.nombre.split(' ')[0]}</div>
+          </div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+
     return html;
   }
 
@@ -2142,11 +2175,14 @@
       const s = calcLineupSummary(entry);
       Object.keys(totals).forEach(k => totals[k] += s[k]);
       const isSelected = selectedLineupPlayerId === entry.playerId;
-      const isSub = entry.starter === false;
-      html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${isSub ? 'opacity:0.5;' : ''}"
+      const pStatus = entry.status || (entry.starter === false ? 'suplente' : 'titular');
+      const statusTag = pStatus === 'suplente' ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>'
+        : pStatus === 'ausente' ? ' <span style="font-size:0.6rem;color:var(--red);font-weight:400;">(AUS)</span>' : '';
+      const rowOpacity = pStatus === 'ausente' ? 'opacity:0.35;' : pStatus === 'suplente' ? 'opacity:0.5;' : '';
+      html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${rowOpacity}"
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
         <td style="padding:4px 8px;color:var(--gold);">${entry.order}</td>
-        <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${isSub ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>' : ''}</td>
+        <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${statusTag}</td>
         <td style="padding:4px;text-align:center;">${s.pa}</td>
         <td style="padding:4px;text-align:center;">${s.ab}</td>
         <td style="padding:4px;text-align:center;color:var(--green);font-weight:700;">${s.h}</td>
@@ -2390,7 +2426,7 @@
     removePlayerFromLineup,
     movePlayerInLineup,
     selectLineupPlayer,
-    toggleStarter,
+    cycleStatus,
     setLineupPosition,
     renderLineupList,
 
