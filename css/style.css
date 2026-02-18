@@ -624,23 +624,6 @@ body.admin-body {
   transition: transform 0.3s ease;
 }
 
-.admin-header.header-compact {
-  padding: 8px 24px;
-}
-
-.admin-header.header-compact .admin-title {
-  font-size: 0.9rem;
-}
-
-.admin-header.header-compact .admin-subtitle {
-  display: none;
-}
-
-.admin-header.header-compact .admin-actions .btn {
-  padding: 5px 10px;
-  font-size: 0.6rem;
-}
-
 .admin-header.header-hidden {
   transform: translateY(-100%);
   pointer-events: none;
@@ -1862,14 +1845,6 @@ body.qr-body {
 @media (max-width: 600px) {
   .admin-header {
     padding: 12px 12px;
-  }
-
-  .admin-header.header-compact {
-    padding: 6px 12px;
-  }
-
-  .admin-header.header-compact .admin-actions {
-    display: none;
   }
 
   .admin-header-inner {

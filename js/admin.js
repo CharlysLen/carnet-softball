@@ -2573,34 +2573,21 @@
   function initScrollHeader() {
     const header = document.querySelector('.admin-header');
     if (!header) return;
-    let lastScrollY = 0;
+    let lastScrollY = window.scrollY;
     let ticking = false;
-    let scrollDelta = 0;
-    const DELTA_THRESHOLD = 30; // min px of scroll in same direction to trigger
+    // Only use transform (header-hidden) — no size changes that affect layout
     window.addEventListener('scroll', function () {
       if (!ticking) {
         window.requestAnimationFrame(function () {
           const currentY = window.scrollY;
-          const diff = currentY - lastScrollY;
-          // Accumulate delta in same direction, reset on direction change
-          if ((diff > 0 && scrollDelta >= 0) || (diff < 0 && scrollDelta <= 0)) {
-            scrollDelta += diff;
-          } else {
-            scrollDelta = diff;
-          }
           if (currentY <= 10) {
-            // At very top: show full header
             header.classList.remove('header-hidden');
-            header.classList.remove('header-compact');
-          } else if (scrollDelta > DELTA_THRESHOLD) {
-            // Scrolling down enough: hide
+          } else if (currentY > lastScrollY + 8) {
+            // Scrolling down: hide header
             header.classList.add('header-hidden');
-            header.classList.add('header-compact');
-            scrollDelta = 0;
-          } else if (scrollDelta < -DELTA_THRESHOLD) {
-            // Scrolling up enough: show compact
+          } else if (currentY < lastScrollY - 8) {
+            // Scrolling up: show header
             header.classList.remove('header-hidden');
-            if (currentY > 60) header.classList.add('header-compact');
           }
           lastScrollY = currentY;
           ticking = false;
