@@ -2440,20 +2440,32 @@
     if (!header) return;
     let lastScrollY = 0;
     let ticking = false;
+    let scrollDelta = 0;
+    const DELTA_THRESHOLD = 30; // min px of scroll in same direction to trigger
     window.addEventListener('scroll', function () {
       if (!ticking) {
         window.requestAnimationFrame(function () {
           const currentY = window.scrollY;
-          if (currentY > 80 && currentY > lastScrollY) {
-            header.classList.add('header-hidden');
+          const diff = currentY - lastScrollY;
+          // Accumulate delta in same direction, reset on direction change
+          if ((diff > 0 && scrollDelta >= 0) || (diff < 0 && scrollDelta <= 0)) {
+            scrollDelta += diff;
           } else {
-            header.classList.remove('header-hidden');
+            scrollDelta = diff;
           }
-          // Compact mode when scrolled past threshold
-          if (currentY > 40) {
-            header.classList.add('header-compact');
-          } else {
+          if (currentY <= 10) {
+            // At very top: show full header
+            header.classList.remove('header-hidden');
             header.classList.remove('header-compact');
+          } else if (scrollDelta > DELTA_THRESHOLD) {
+            // Scrolling down enough: hide
+            header.classList.add('header-hidden');
+            header.classList.add('header-compact');
+            scrollDelta = 0;
+          } else if (scrollDelta < -DELTA_THRESHOLD) {
+            // Scrolling up enough: show compact
+            header.classList.remove('header-hidden');
+            if (currentY > 60) header.classList.add('header-compact');
           }
           lastScrollY = currentY;
           ticking = false;
