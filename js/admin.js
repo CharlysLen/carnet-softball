@@ -299,6 +299,7 @@
               ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>` : ''}
               ${pendienteAprobacion && (isAdmin() || isSuperuser()) ? `<button class="btn btn-sm btn-success" onclick="Admin.aprobarJugador('${p.id}')" title="Aprobar jugador">✔ Aprobar</button>` : ''}
               ${!pendienteAprobacion && canToggleStatus() ? `<button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
+              ${(isAdmin() || isSuperuser()) ? `<button class="btn btn-sm btn-danger" onclick="Admin.deletePlayer('${p.id}')" title="Eliminar jugador">🗑</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.viewCard('${p.id}')">👁</button>
             </div>
           </div>`;
@@ -333,6 +334,13 @@
     if (!isAdmin() && !isSuperuser()) return;
     const p = players.find(x => x.id === id); if (!p) return;
     if (!confirm(`¿Rechazar y eliminar a ${p.nombre} del equipo ${p.equipo}?`)) return;
+    players = players.filter(x => x.id !== id);
+    autoSave(); renderView();
+  }
+  function deletePlayer(id) {
+    if (!isAdmin() && !isSuperuser()) return;
+    const p = players.find(x => x.id === id); if (!p) return;
+    if (!confirm(`¿Eliminar a ${p.nombre} (#${p.dorsal}) del equipo ${p.equipo}?`)) return;
     players = players.filter(x => x.id !== id);
     autoSave(); renderView();
   }
@@ -1670,6 +1678,7 @@
     toggleVerificado,
     aprobarJugador,
     rechazarJugador,
+    deletePlayer,
     viewCard,
 
     // Edit functions
