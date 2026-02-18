@@ -1047,11 +1047,85 @@
     });
 
     html += `</tbody></table></div>
-       <div style="text-align:center;">
+       <div style="text-align:center;margin-bottom:30px;">
          <button class="btn btn-sm btn-secondary" onclick="Admin.resetStandings()">🔄 Recalcular desde Partidos</button>
        </div>
+
+       ${renderLeaders()}
     </div>`;
     c.innerHTML = html;
+  }
+
+  function renderLeaders() {
+    // Recalc to ensure stats are up to date
+    recalcAllPlayerStats();
+
+    // Categories to show
+    const categories = [
+      { key: 'avg', label: 'AVG (Promedio)', format: v => v, icon: '🎯', minAB: 5 },
+      { key: 'hr', label: 'HR (Home Runs)', format: v => v, icon: '💣' },
+      { key: 'h', label: 'H (Hits)', format: v => v, icon: '🏏' },
+      { key: 'rbi', label: 'RBI (Carreras Impulsadas)', format: v => v, icon: '💪' },
+      { key: 'r', label: 'R (Carreras Anotadas)', format: v => v, icon: '🏃' },
+      { key: 'ab', label: 'AB (Turnos al Bate)', format: v => v, icon: '⚾' },
+      { key: 'doubles', label: '2B (Dobles)', format: v => v, icon: '✌' },
+      { key: 'triples', label: '3B (Triples)', format: v => v, icon: '🔥' },
+      { key: 'bb', label: 'BB (Bases por Bolas)', format: v => v, icon: '👁' },
+      { key: 'sb', label: 'SB (Bases Robadas)', format: v => v, icon: '⚡' },
+    ];
+
+    let html = `<h2 style="font-family:var(--font-display);color:var(--gold);text-align:center;margin:30px 0 20px;letter-spacing:2px;">🏆 LÍDERES DE LA LIGA</h2>`;
+    html += `<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(340px, 1fr));gap:16px;">`;
+
+    for (const cat of categories) {
+      // Get players with stats, filter and sort
+      let ranked = players
+        .filter(p => p.stats && p.aprobado !== false)
+        .map(p => ({ ...p, val: cat.key === 'avg' ? parseFloat(p.stats.avg) || 0 : (p.stats[cat.key] || 0) }));
+
+      // For AVG, require minimum at-bats
+      if (cat.minAB) {
+        ranked = ranked.filter(p => (p.stats.ab || 0) >= cat.minAB);
+      }
+
+      // Filter out zeros (except AVG where 0 is meaningful if they have ABs)
+      if (cat.key !== 'avg') {
+        ranked = ranked.filter(p => p.val > 0);
+      }
+
+      ranked.sort((a, b) => b.val - a.val);
+      const top10 = ranked.slice(0, 10);
+
+      if (top10.length === 0) continue;
+
+      html += `<div style="background:var(--bg-card);border-radius:14px;padding:16px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.08);">
+          <span style="font-size:1.2rem;">${cat.icon}</span>
+          <span style="font-family:var(--font-display);font-size:0.85rem;letter-spacing:1px;color:var(--gold);text-transform:uppercase;">${cat.label}</span>
+        </div>`;
+
+      top10.forEach((p, i) => {
+        const team = equipos.find(e => e.nombre === p.equipo);
+        const teamEmoji = team ? (team.escudo || '🥎') : '🥎';
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<span style="color:var(--white-muted);font-size:0.75rem;width:20px;display:inline-block;text-align:center;">${i + 1}</span>`;
+        const displayVal = cat.key === 'avg' ? (p.val === 0 ? '.000' : p.val.toFixed(3).replace(/^0+/, '')) : p.val;
+        const highlight = i === 0 ? 'color:var(--gold);font-weight:800;font-size:1rem;' : 'color:var(--white);font-weight:600;';
+
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;${i < top10.length - 1 ? 'border-bottom:1px solid rgba(255,255,255,0.02);' : ''}"
+          onclick="Admin.viewCard('${p.id}')" title="Ver ficha" style="cursor:pointer;">
+          <span style="width:24px;text-align:center;">${medal}</span>
+          <span style="font-size:0.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${p.nombre} <span style="font-size:0.65rem;color:var(--white-muted);">${teamEmoji}</span>
+          </span>
+          <span style="${highlight}font-family:monospace;">${displayVal}</span>
+        </div>`;
+      });
+
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
   }
 
   function updateStanding(teamId, field, value) {
