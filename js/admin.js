@@ -1767,7 +1767,7 @@
     const tp = players.filter(p => p.equipo === teamName && p.aprobado !== false);
     if (tp.length === 0) { alert('No hay jugadores aprobados en ' + teamName); return; }
     m.lineup[teamName] = tp.map((p, i) => ({
-      playerId: p.id, order: i + 1, position: p.posicion,
+      playerId: p.id, order: i + 1, position: p.posicion, starter: true,
       turns: [], defense: { outs: 0, errors: 0, assists: 0 }
     }));
     autoSave();
@@ -1862,14 +1862,17 @@
     const tn = teamName.replace(/'/g, "\\'");
     const pid = playerId;
 
+    const isStarter = entry.starter !== false;
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${entry.order}</span>
           <span style="font-weight:700;font-size:1rem;">${p.nombre}</span>
-          <span style="font-size:0.75rem;color:var(--white-muted);">(${entry.position})</span>
+          <span style="font-size:0.75rem;color:var(--white-muted);">(${shortenPosition(entry.position)})</span>
+          <span style="font-size:0.6rem;padding:2px 8px;border-radius:10px;font-weight:600;${isStarter ? 'background:rgba(0,230,118,0.15);color:var(--green);' : 'background:rgba(255,255,255,0.08);color:var(--white-muted);'}">${isStarter ? 'Titular' : 'Suplente'}</span>
         </div>
         <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm ${isStarter ? 'btn-secondary' : 'btn-success'}" onclick="Admin.toggleStarter('${mid}','${tn}','${pid}')" title="${isStarter ? 'Mover a suplente' : 'Poner de titular'}">${isStarter ? '📋' : '⚾'}</button>
           <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','up')" title="Subir">▲</button>
           <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','down')" title="Bajar">▼</button>
           <button class="btn btn-sm btn-danger" onclick="Admin.removePlayerFromLineup('${mid}','${tn}','${pid}')" title="Quitar">✕</button>
@@ -1937,7 +1940,7 @@
     if (!p) return;
     const maxOrder = m.lineup[teamName].reduce((mx, e) => Math.max(mx, e.order), 0);
     m.lineup[teamName].push({
-      playerId: p.id, order: maxOrder + 1, position: p.posicion,
+      playerId: p.id, order: maxOrder + 1, position: p.posicion, starter: false,
       turns: [], defense: { outs: 0, errors: 0, assists: 0 }
     });
     autoSave(); renderView();
@@ -1981,18 +1984,48 @@
     'Utility':      { x: 50, y: 75 }
   };
 
+  function shortenPosition(pos) {
+    return (pos || '').replace('Primera Base','1B').replace('Segunda Base','2B').replace('Tercera Base','3B')
+      .replace('Left Field','LF').replace('Center Field','CF').replace('Right Field','RF')
+      .replace('Shortfield','SF').replace('Shortstop','SS');
+  }
+
+  function toggleStarter(matchId, teamName, playerId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const entry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!entry) return;
+    entry.starter = entry.starter === false ? true : (entry.starter === undefined ? false : !entry.starter);
+    autoSave();
+    renderView();
+  }
+
   function renderFieldMap(match, teamName) {
     const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
     if (lineup.length === 0) return '';
+
+    // Only starters on the field (default: all are starters if not explicitly set)
+    const starters = lineup.filter(e => e.starter !== false);
+    const subs = lineup.filter(e => e.starter === false);
+    const canEdit = canEditTeam(teamName);
     const mid = match.id;
     const tn = teamName.replace(/'/g, "\\'");
-    const canEdit = canEditTeam(teamName);
 
+    // Track used positions to offset duplicates
+    const usedPositions = {};
     let spots = '';
-    for (const entry of lineup) {
+    for (const entry of starters) {
       const p = players.find(x => x.id === entry.playerId);
       if (!p) continue;
-      const pos = FIELD_POSITIONS[entry.position] || FIELD_POSITIONS['Utility'];
+      let pos = FIELD_POSITIONS[entry.position] || FIELD_POSITIONS['Utility'];
+      // Offset duplicates slightly
+      const posKey = entry.position || 'Utility';
+      if (usedPositions[posKey]) {
+        usedPositions[posKey]++;
+        pos = { x: pos.x + (usedPositions[posKey] % 2 === 0 ? 6 : -6), y: pos.y + (usedPositions[posKey] > 2 ? 8 : -2) };
+      } else {
+        usedPositions[posKey] = 1;
+      }
       const photo = p.foto
         ? `<img src="${p.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
         : `<span style="font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.8);">${p.nombre.charAt(0)}</span>`;
@@ -2000,39 +2033,56 @@
       const statLine = s.pa > 0 ? `${s.h}-${s.ab}` : '';
 
       spots += `<div class="field-spot" style="left:${pos.x}%;top:${pos.y}%;"
-        onclick="Admin.selectLineupPlayer('${entry.playerId}')" title="${p.nombre} — ${entry.position}">
+        onclick="Admin.selectLineupPlayer('${entry.playerId}')">
         <div class="field-avatar" style="border-color:${selectedLineupPlayerId === entry.playerId ? 'var(--gold)' : 'rgba(255,255,255,0.4)'};">
           ${photo}
         </div>
         <div class="field-name">${p.nombre.split(' ')[0]}</div>
-        <div class="field-pos">${entry.position.replace('Primera Base','1B').replace('Segunda Base','2B').replace('Tercera Base','3B').replace('Left Field','LF').replace('Center Field','CF').replace('Right Field','RF')}</div>
+        <div class="field-pos">${shortenPosition(entry.position)}</div>
         ${statLine ? `<div class="field-stat">${statLine}</div>` : ''}
       </div>`;
     }
 
-    return `<div class="softball-field" style="position:relative;width:100%;max-width:500px;margin:0 auto 20px;aspect-ratio:5/4;background:radial-gradient(ellipse at 50% 95%, rgba(139,90,43,0.3) 0%, rgba(34,85,34,0.25) 30%, rgba(34,85,34,0.15) 60%, transparent 80%);border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
-      <!-- Field lines -->
-      <svg viewBox="0 0 400 320" style="position:absolute;inset:0;width:100%;height:100%;" preserveAspectRatio="xMidYMid meet">
-        <!-- Outfield arc -->
+    let html = `<div class="softball-field" style="position:relative;width:100%;max-width:500px;margin:0 auto 12px;aspect-ratio:5/4;background:radial-gradient(ellipse at 50% 95%, rgba(139,90,43,0.3) 0%, rgba(34,85,34,0.25) 30%, rgba(34,85,34,0.15) 60%, transparent 80%);border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);">
+      <svg viewBox="0 0 400 320" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" preserveAspectRatio="xMidYMid meet">
         <path d="M 20,90 Q 200,-30 380,90" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
-        <!-- Diamond -->
         <polygon points="200,175 280,230 200,285 120,230" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
-        <!-- Infield arc -->
         <path d="M 120,175 Q 200,130 280,175" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
-        <!-- Foul lines -->
         <line x1="200" y1="285" x2="30" y2="50" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
         <line x1="200" y1="285" x2="370" y2="50" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
-        <!-- Bases -->
         <rect x="196" y="172" width="8" height="8" transform="rotate(45,200,176)" fill="var(--white)" opacity="0.4"/>
         <rect x="276" y="226" width="8" height="8" transform="rotate(45,280,230)" fill="var(--white)" opacity="0.4"/>
         <rect x="116" y="226" width="8" height="8" transform="rotate(45,120,230)" fill="var(--white)" opacity="0.4"/>
-        <!-- Home plate -->
         <polygon points="196,285 200,280 204,285 204,290 196,290" fill="var(--white)" opacity="0.5"/>
-        <!-- Pitcher mound -->
         <circle cx="200" cy="230" r="5" fill="rgba(139,90,43,0.4)" stroke="rgba(255,255,255,0.1)"/>
       </svg>
       ${spots}
     </div>`;
+
+    // Bench / Suplentes section
+    if (subs.length > 0) {
+      html += `<div style="margin:0 auto 16px;max-width:500px;background:rgba(255,255,255,0.02);border-radius:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:6px;font-weight:600;letter-spacing:1px;">SUPLENTES (${subs.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+      for (const entry of subs) {
+        const p = players.find(x => x.id === entry.playerId);
+        if (!p) continue;
+        const photo = p.foto
+          ? `<img src="${p.foto}" style="width:24px;height:24px;object-fit:cover;border-radius:50%;">`
+          : `<span style="font-size:0.55rem;font-weight:700;">${p.nombre.charAt(0)}</span>`;
+        const isSelected = selectedLineupPlayerId === entry.playerId;
+        html += `<div onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;cursor:pointer;background:${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isSelected ? 'rgba(245,166,35,0.3)' : 'rgba(255,255,255,0.05)'};transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'}'"}>
+          <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;background:var(--bg-card);display:flex;align-items:center;justify-content:center;">${photo}</div>
+          <div>
+            <div style="font-size:0.7rem;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre.split(' ')[0]}</div>
+            <div style="font-size:0.55rem;color:var(--gold);">${shortenPosition(entry.position)}</div>
+          </div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+
+    return html;
   }
 
   function renderLineupEditor(match, teamName) {
@@ -2078,10 +2128,11 @@
       const s = calcLineupSummary(entry);
       Object.keys(totals).forEach(k => totals[k] += s[k]);
       const isSelected = selectedLineupPlayerId === entry.playerId;
-      html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}"
+      const isSub = entry.starter === false;
+      html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${isSub ? 'opacity:0.5;' : ''}"
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
         <td style="padding:4px 8px;color:var(--gold);">${entry.order}</td>
-        <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}</td>
+        <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${isSub ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>' : ''}</td>
         <td style="padding:4px;text-align:center;">${s.pa}</td>
         <td style="padding:4px;text-align:center;">${s.ab}</td>
         <td style="padding:4px;text-align:center;color:var(--green);font-weight:700;">${s.h}</td>
@@ -2325,6 +2376,7 @@
     removePlayerFromLineup,
     movePlayerInLineup,
     selectLineupPlayer,
+    toggleStarter,
     renderLineupList,
 
     // Legacy aliases
