@@ -1905,39 +1905,13 @@
 
   function selectLineupPlayer(playerId) {
     selectedLineupPlayerId = playerId;
-    const m = partidos.find(x => x.id === selectedMatchId);
-    if (!m) return;
-
-    // Find the team whose lineup contains this player (don't rely on lineupSubView alone)
-    let teamName = null;
-    const candidates = lineupSubView === 'visitante'
-      ? [m.visitante, m.local]
-      : [m.local, m.visitante];
-    for (const tn of candidates) {
-      if (m.lineup && m.lineup[tn] && m.lineup[tn].find(e => e.playerId === playerId)) {
-        teamName = tn;
-        break;
-      }
-    }
-    if (!teamName) return;
-
-    const box = document.getElementById('lineup-editor-box');
-    if (!box) {
-      // Fallback: full re-render (box not in DOM means canEdit was false)
-      renderView();
-      return;
-    }
-
-    const html = buildPlayerEditor(m, teamName, playerId);
-    if (!html) return; // player or entry not found
-
-    box.innerHTML = html;
-    // Highlight selected row in table
-    document.querySelectorAll('#lineup-summary-table tr[data-pid]').forEach(tr => {
-      tr.style.background = tr.dataset.pid === playerId ? 'rgba(245,166,35,0.15)' : '';
+    // Re-render the whole view — renderLineupEditor already handles selectedLineupPlayerId
+    renderView();
+    // After render, scroll to the editor box
+    requestAnimationFrame(function () {
+      var box = document.getElementById('lineup-editor-box');
+      if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
-    // Scroll editor into view
-    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function setTurnResult(matchId, teamName, playerId, turnIdx, field, value) {
