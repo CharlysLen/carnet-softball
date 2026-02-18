@@ -14,6 +14,7 @@
   let currentView = 'teams';
   let selectedTeam = null;
   let selectedMatchId = null;
+  let lineupSubView = 'resumen'; // resumen | local | visitante | bitacora
   let csvParsedData = [];
   let pendingPlayerPhoto = '';
   let pendingTeamImage = '';
@@ -83,6 +84,7 @@
     else if (currentView === 'calendar') renderCalendar();
     else if (currentView === 'standings') renderStandings();
     else if (currentView === 'match') renderMatchDetail();
+    else if (currentView === 'lineup') renderLineupList();
     else if (currentView === 'users') renderUsers();
   }
 
@@ -97,7 +99,7 @@
       l.style.color = 'var(--white-muted)';
     });
     const links = document.querySelectorAll('.nav-link');
-    const idx = { teams: 0, calendar: 1, standings: 2, users: 3 }[view];
+    const idx = { teams: 0, calendar: 1, standings: 2, lineup: 3, users: 4 }[view];
     if (links[idx]) { links[idx].classList.add('active'); links[idx].style.color = 'var(--white)'; }
     renderView();
   }
@@ -1259,24 +1261,51 @@
         </div>
 
         ${mvpHtml}
-        
-        <div style="display:grid;grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
-          <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--white-muted);font-size:0.9rem;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:15px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">${m.local}</h3>
-            ${renderTeamList(m.local)}
+
+        <!-- Sub-tabs -->
+        <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
+          ${['resumen', 'local', 'visitante', 'bitacora'].map(tab => {
+            const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: '📝 Bitácora' };
+            const active = lineupSubView === tab;
+            return `<button onclick="Admin.setLineupSubView('${tab}')"
+              style="padding:10px 16px;font-size:0.8rem;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
+              background:transparent;color:${active ? 'var(--gold)' : 'var(--white-muted)'};cursor:pointer;margin-bottom:-2px;transition:all 0.2s;">
+              ${labels[tab]}</button>`;
+          }).join('')}
+        </div>
+
+        <div style="margin-top:20px;">
+        ${lineupSubView === 'resumen' ? `
+          <div style="display:grid;grid-template-columns: 1fr 1fr; gap:20px;">
+            <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+              <h3 style="color:var(--white-muted);font-size:0.9rem;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:15px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">${m.local}</h3>
+              ${renderTeamList(m.local)}
+            </div>
+            <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+              <h3 style="color:var(--white-muted);font-size:0.9rem;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:15px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">${m.visitante}</h3>
+              ${renderTeamList(m.visitante)}
+            </div>
           </div>
+        ` : lineupSubView === 'local' ? `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--white-muted);font-size:0.9rem;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:15px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">${m.visitante}</h3>
-            ${renderTeamList(m.visitante)}
+            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:15px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.local}</h3>
+            ${renderLineupEditor(m, m.local)}
           </div>
-          <div style="margin-top:20px;background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+        ` : lineupSubView === 'visitante' ? `
+          <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:15px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.visitante}</h3>
+            ${renderLineupEditor(m, m.visitante)}
+          </div>
+        ` : `
+          <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
             <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">📝 Cuaderno de Bitácora</h3>
-            <textarea id="match-log-${m.id}" 
+            <textarea id="match-log-${m.id}"
                       style="width:100%;height:120px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:var(--white);font-family:inherit;resize:vertical;"
                       placeholder="Escribe aquí las incidencias, notas del partido o comentarios..."
                       onblur="Admin.saveMatchLog('${m.id}', this.value)">${m.bitacora || ''}</textarea>
             <div style="text-align:right;font-size:0.7rem;color:var(--white-muted);margin-top:5px;">Se guarda automáticamente al hacer clic fuera.</div>
           </div>
+        `}
         </div>
         
       </div>`;
@@ -1286,8 +1315,14 @@
   function viewMatch(id) {
     selectedMatchId = id;
     currentView = 'match';
+    lineupSubView = 'resumen';
     renderView();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function setLineupSubView(view) {
+    lineupSubView = view;
+    renderView();
   }
 
   function backToCalendar() {
@@ -1562,12 +1597,14 @@
   }
 
   function recalcAllPlayerStats() {
-    // Reset all player stats
+    // Reset all player stats (including extended fields)
     for (const p of players) {
-      p.stats = { ab: 0, h: 0, hr: 0, rbi: 0, r: 0, avg: '.000' };
+      p.stats = { ab: 0, h: 0, hr: 0, rbi: 0, r: 0, avg: '.000', pa: 0, doubles: 0, triples: 0, bb: 0, k: 0, sb: 0 };
     }
     // Accumulate from all matches
     for (const m of partidos) {
+      // Sync lineup data to playerStats first
+      if (m.lineup) syncLineupToPlayerStats(m);
       if (!m.playerStats) continue;
       for (const [pid, s] of Object.entries(m.playerStats)) {
         const p = players.find(x => x.id === pid);
@@ -1578,11 +1615,374 @@
         p.stats.rbi += (parseInt(s.rbi, 10) || 0);
         p.stats.r += (parseInt(s.r, 10) || 0);
       }
+      // Aggregate extended stats from lineup data
+      if (m.lineup) {
+        for (const entries of Object.values(m.lineup)) {
+          for (const entry of entries) {
+            const p = players.find(x => x.id === entry.playerId);
+            if (!p) continue;
+            const s = calcLineupSummary(entry);
+            p.stats.pa += s.pa;
+            p.stats.doubles += s.doubles;
+            p.stats.triples += s.triples;
+            p.stats.bb += s.bb;
+            p.stats.k += s.k;
+            p.stats.sb += s.sb;
+          }
+        }
+      }
     }
     // Calculate AVG
     for (const p of players) {
       p.stats.avg = p.stats.ab > 0 ? (p.stats.h / p.stats.ab).toFixed(3).replace(/^0+/, '') : '.000';
     }
+  }
+
+  // ── LINEUP / SCORECARD ──
+  const TURN_RESULTS = ['H', '2', '3', '4', 'B', 'E', 'K', 'O'];
+  const TURN_RESULT_LABELS = { H: 'H', '2': '2B', '3': '3B', '4': 'HR', B: 'BB', E: 'E', K: 'K', O: 'OUT' };
+  const TURN_RESULT_COLORS = { H: '#4caf50', '2': '#8bc34a', '3': '#ff9800', '4': '#f44336', B: '#2196f3', E: '#9c27b0', K: '#795548', O: '#607d8b' };
+
+  function calcLineupSummary(entry) {
+    const turns = (entry.turns || []).filter(t => t.result);
+    const pa = turns.length;
+    const bb = turns.filter(t => t.result === 'B').length;
+    const ab = pa - bb;
+    const h = turns.filter(t => ['H', '2', '3', '4'].includes(t.result)).length;
+    const doubles = turns.filter(t => t.result === '2').length;
+    const triples = turns.filter(t => t.result === '3').length;
+    const hr = turns.filter(t => t.result === '4').length;
+    const k = turns.filter(t => t.result === 'K').length;
+    const o = turns.filter(t => t.result === 'O').length;
+    const sb = turns.filter(t => t.sb).length;
+    const r = turns.filter(t => t.run).length;
+    const rbi = turns.reduce((s, t) => s + (t.rbi || 0), 0);
+    const avg = ab > 0 ? (h / ab).toFixed(3).replace(/^0+/, '') : '.000';
+    return { pa, ab, h, doubles, triples, hr, bb, k, o, sb, r, rbi, avg };
+  }
+
+  function syncLineupToPlayerStats(match) {
+    if (!match.lineup) return;
+    if (!match.playerStats) match.playerStats = {};
+    for (const entries of Object.values(match.lineup)) {
+      for (const entry of entries) {
+        const s = calcLineupSummary(entry);
+        match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, hr: s.hr, rbi: s.rbi, r: s.r };
+      }
+    }
+    // Recalculate scores
+    let ls = 0, vs = 0;
+    const localPlayers = players.filter(p => p.equipo === match.local).map(p => p.id);
+    for (const [pid, ps] of Object.entries(match.playerStats)) {
+      if (localPlayers.includes(pid)) ls += (ps.r || 0);
+      else vs += (ps.r || 0);
+    }
+    match.localScore = ls;
+    match.visitScore = vs;
+  }
+
+  function initLineupForMatch(matchId, teamName) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    if (!m.lineup) m.lineup = {};
+    if (m.lineup[teamName]) return; // already exists
+    const tp = players.filter(p => p.equipo === teamName && p.aprobado !== false);
+    m.lineup[teamName] = tp.map((p, i) => ({
+      playerId: p.id, order: i + 1, position: p.posicion,
+      turns: [], defense: { outs: 0, errors: 0, assists: 0 }
+    }));
+    autoSave();
+  }
+
+  function setTurnResult(matchId, teamName, playerId, turnIdx, field, value) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const entry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!entry) return;
+    // Ensure turns array has enough slots
+    while (entry.turns.length <= turnIdx) {
+      entry.turns.push({ result: '', sb: false, run: false, rbi: 0, direction: '' });
+    }
+    const turn = entry.turns[turnIdx];
+    if (field === 'result') {
+      turn.result = turn.result === value ? '' : value; // toggle off if same
+    } else if (field === 'sb' || field === 'run') {
+      turn[field] = !turn[field];
+    } else if (field === 'rbi') {
+      turn.rbi = parseInt(value, 10) || 0;
+    } else if (field === 'direction') {
+      turn.direction = value;
+    }
+    syncLineupToPlayerStats(m);
+    autoSave();
+    renderView();
+  }
+
+  function setDefenseStat(matchId, teamName, playerId, field, value) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const entry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!entry) return;
+    entry.defense[field] = parseInt(value, 10) || 0;
+    autoSave();
+  }
+
+  function addPlayerToLineup(matchId, teamName, playerId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (m.lineup[teamName].find(e => e.playerId === playerId)) return; // already in
+    const p = players.find(x => x.id === playerId);
+    if (!p) return;
+    const maxOrder = m.lineup[teamName].reduce((mx, e) => Math.max(mx, e.order), 0);
+    m.lineup[teamName].push({
+      playerId: p.id, order: maxOrder + 1, position: p.posicion,
+      turns: [], defense: { outs: 0, errors: 0, assists: 0 }
+    });
+    autoSave(); renderView();
+  }
+
+  function removePlayerFromLineup(matchId, teamName, playerId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    m.lineup[teamName] = m.lineup[teamName].filter(e => e.playerId !== playerId);
+    // Re-order
+    m.lineup[teamName].forEach((e, i) => e.order = i + 1);
+    syncLineupToPlayerStats(m);
+    autoSave(); renderView();
+  }
+
+  function movePlayerInLineup(matchId, teamName, playerId, direction) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const arr = m.lineup[teamName];
+    const idx = arr.findIndex(e => e.playerId === playerId);
+    if (idx < 0) return;
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= arr.length) return;
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    arr.forEach((e, i) => e.order = i + 1);
+    autoSave(); renderView();
+  }
+
+  function renderLineupEditor(match, teamName) {
+    const canEdit = canEditTeam(teamName);
+    const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
+
+    if (lineup.length === 0 && canEdit) {
+      return `<div style="text-align:center;padding:40px 20px;">
+        <p style="color:var(--white-muted);margin-bottom:16px;">No hay alineación para este equipo.</p>
+        <button class="btn btn-primary" onclick="Admin.initLineupForMatch('${match.id}','${teamName.replace(/'/g, "\\'")}'); Admin.renderView();">
+          📋 Crear Alineación desde Roster
+        </button>
+      </div>`;
+    }
+    if (lineup.length === 0) {
+      return '<div style="text-align:center;padding:40px;color:var(--white-muted);">Sin alineación registrada.</div>';
+    }
+
+    // Summary table
+    let summaryHtml = `<div style="overflow-x:auto;margin-bottom:20px;">
+      <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+        <thead><tr style="background:rgba(255,255,255,0.05);">
+          <th style="padding:6px 8px;text-align:left;">#</th>
+          <th style="padding:6px 8px;text-align:left;">Jugador</th>
+          <th style="padding:6px 4px;">PA</th><th style="padding:6px 4px;">AB</th>
+          <th style="padding:6px 4px;">H</th><th style="padding:6px 4px;">2B</th>
+          <th style="padding:6px 4px;">3B</th><th style="padding:6px 4px;">HR</th>
+          <th style="padding:6px 4px;">BB</th><th style="padding:6px 4px;">K</th>
+          <th style="padding:6px 4px;">SB</th><th style="padding:6px 4px;">R</th>
+          <th style="padding:6px 4px;">RBI</th><th style="padding:6px 4px;">AVG</th>
+        </tr></thead><tbody>`;
+
+    const totals = { pa: 0, ab: 0, h: 0, doubles: 0, triples: 0, hr: 0, bb: 0, k: 0, sb: 0, r: 0, rbi: 0 };
+
+    for (const entry of lineup) {
+      const p = players.find(x => x.id === entry.playerId);
+      if (!p) continue;
+      const s = calcLineupSummary(entry);
+      Object.keys(totals).forEach(k => totals[k] += s[k]);
+      summaryHtml += `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        <td style="padding:4px 8px;color:var(--gold);">${entry.order}</td>
+        <td style="padding:4px 8px;font-weight:600;">${p.nombre}</td>
+        <td style="padding:4px;text-align:center;">${s.pa}</td>
+        <td style="padding:4px;text-align:center;">${s.ab}</td>
+        <td style="padding:4px;text-align:center;color:var(--green);font-weight:700;">${s.h}</td>
+        <td style="padding:4px;text-align:center;">${s.doubles}</td>
+        <td style="padding:4px;text-align:center;">${s.triples}</td>
+        <td style="padding:4px;text-align:center;${s.hr > 0 ? 'color:var(--red);font-weight:700;' : ''}">${s.hr}</td>
+        <td style="padding:4px;text-align:center;">${s.bb}</td>
+        <td style="padding:4px;text-align:center;">${s.k}</td>
+        <td style="padding:4px;text-align:center;">${s.sb}</td>
+        <td style="padding:4px;text-align:center;">${s.r}</td>
+        <td style="padding:4px;text-align:center;">${s.rbi}</td>
+        <td style="padding:4px;text-align:center;font-weight:700;">${s.avg}</td>
+      </tr>`;
+    }
+    const tAvg = totals.ab > 0 ? (totals.h / totals.ab).toFixed(3).replace(/^0+/, '') : '.000';
+    summaryHtml += `<tr style="border-top:2px solid var(--gold);font-weight:700;">
+      <td colspan="2" style="padding:6px 8px;">TOTALES</td>
+      <td style="padding:4px;text-align:center;">${totals.pa}</td>
+      <td style="padding:4px;text-align:center;">${totals.ab}</td>
+      <td style="padding:4px;text-align:center;">${totals.h}</td>
+      <td style="padding:4px;text-align:center;">${totals.doubles}</td>
+      <td style="padding:4px;text-align:center;">${totals.triples}</td>
+      <td style="padding:4px;text-align:center;">${totals.hr}</td>
+      <td style="padding:4px;text-align:center;">${totals.bb}</td>
+      <td style="padding:4px;text-align:center;">${totals.k}</td>
+      <td style="padding:4px;text-align:center;">${totals.sb}</td>
+      <td style="padding:4px;text-align:center;">${totals.r}</td>
+      <td style="padding:4px;text-align:center;">${totals.rbi}</td>
+      <td style="padding:4px;text-align:center;">${tAvg}</td>
+    </tr></tbody></table></div>`;
+
+    if (!canEdit) return summaryHtml;
+
+    // Editable turn-by-turn cards
+    let editorHtml = '<div class="lineup-editor">';
+    const mid = match.id;
+    const tn = teamName.replace(/'/g, "\\'");
+
+    for (const entry of lineup) {
+      const p = players.find(x => x.id === entry.playerId);
+      if (!p) continue;
+      const pid = entry.playerId;
+
+      editorHtml += `<div class="lineup-player-card" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${entry.order}</span>
+            <span style="font-weight:700;">${p.nombre}</span>
+            <span style="font-size:0.7rem;color:var(--white-muted);">(${entry.position})</span>
+          </div>
+          <div style="display:flex;gap:4px;">
+            <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','up')" title="Subir">▲</button>
+            <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','down')" title="Bajar">▼</button>
+            <button class="btn btn-sm btn-danger" onclick="Admin.removePlayerFromLineup('${mid}','${tn}','${pid}')" title="Quitar">✕</button>
+          </div>
+        </div>`;
+
+      // 5 turns
+      for (let t = 0; t < 5; t++) {
+        const turn = entry.turns[t] || { result: '', sb: false, run: false, rbi: 0, direction: '' };
+        editorHtml += `<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:8px;">
+          <div style="font-size:0.65rem;color:var(--white-muted);margin-bottom:4px;">Turno ${t + 1}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px;">`;
+
+        for (const code of TURN_RESULTS) {
+          const active = turn.result === code;
+          const color = active ? TURN_RESULT_COLORS[code] : 'transparent';
+          const border = active ? TURN_RESULT_COLORS[code] : 'rgba(255,255,255,0.15)';
+          editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'result','${code}')"
+            style="padding:3px 7px;font-size:0.7rem;font-weight:700;border-radius:4px;border:1px solid ${border};
+            background:${color};color:${active ? '#fff' : 'var(--white-muted)'};cursor:pointer;min-width:28px;">
+            ${TURN_RESULT_LABELS[code]}</button>`;
+        }
+        editorHtml += `</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">`;
+
+        // S, A flags
+        const sbActive = turn.sb ? 'background:var(--blue-check);color:#fff;' : '';
+        const runActive = turn.run ? 'background:var(--green);color:#fff;' : '';
+        editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'sb','')"
+          style="padding:2px 6px;font-size:0.65rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${sbActive}">S</button>`;
+        editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'run','')"
+          style="padding:2px 6px;font-size:0.65rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runActive}">A</button>`;
+
+        // RBI
+        editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
+          style="padding:2px 4px;font-size:0.65rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
+          <option value="0" ${turn.rbi === 0 ? 'selected' : ''}>I:0</option>
+          <option value="1" ${turn.rbi === 1 ? 'selected' : ''}>I:1</option>
+          <option value="2" ${turn.rbi === 2 ? 'selected' : ''}>I:2</option>
+          <option value="3" ${turn.rbi === 3 ? 'selected' : ''}>I:3</option>
+          <option value="4" ${turn.rbi === 4 ? 'selected' : ''}>I:4</option>
+        </select>`;
+
+        // Direction
+        editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'direction',this.value)"
+          style="padding:2px 4px;font-size:0.65rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
+          <option value="" ${!turn.direction ? 'selected' : ''}>D:-</option>
+          <option value="LF" ${turn.direction === 'LF' ? 'selected' : ''}>LF</option>
+          <option value="CF" ${turn.direction === 'CF' ? 'selected' : ''}>CF</option>
+          <option value="RF" ${turn.direction === 'RF' ? 'selected' : ''}>RF</option>
+        </select>`;
+
+        editorHtml += `</div></div>`;
+      }
+
+      // Defense
+      editorHtml += `<div style="margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;">
+        <div style="font-size:0.65rem;color:var(--white-muted);margin-bottom:4px;">Defensa</div>
+        <div style="display:flex;gap:10px;">
+          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">O: <input type="number" min="0" max="99" value="${entry.defense.outs}"
+            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','outs',this.value)"
+            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
+          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">E: <input type="number" min="0" max="99" value="${entry.defense.errors}"
+            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','errors',this.value)"
+            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
+          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">A: <input type="number" min="0" max="99" value="${entry.defense.assists}"
+            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','assists',this.value)"
+            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
+        </div>
+      </div>`;
+
+      editorHtml += '</div>'; // close player card
+    }
+
+    // Add player button
+    const teamPlayers = players.filter(p => p.equipo === teamName && p.aprobado !== false);
+    const inLineup = lineup.map(e => e.playerId);
+    const available = teamPlayers.filter(p => !inLineup.includes(p.id));
+    if (available.length > 0) {
+      editorHtml += `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+        <select id="lineup-add-${match.id}-${teamName.replace(/\s/g, '_')}" style="flex:1;padding:8px;background:var(--bg-card);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:8px;">
+          ${available.map(p => `<option value="${p.id}">#${p.dorsal} ${p.nombre}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="Admin.addPlayerToLineup('${mid}','${tn}',document.getElementById('lineup-add-${match.id}-${teamName.replace(/\s/g, '_')}').value)">+ Añadir</button>
+      </div>`;
+    }
+
+    editorHtml += '</div>';
+    return summaryHtml + editorHtml;
+  }
+
+  function renderLineupList() {
+    const c = document.getElementById('main-content');
+    const matchesWithLineup = partidos.filter(m => m.lineup && Object.keys(m.lineup).length > 0);
+    const matchesWithout = partidos.filter(m => !m.lineup || Object.keys(m.lineup).length === 0);
+
+    let html = '<div style="max-width:900px;margin:0 auto;">';
+    html += '<h2 style="font-family:var(--font-display);margin-bottom:20px;">📋 Alineaciones</h2>';
+
+    if (matchesWithLineup.length > 0) {
+      html += '<h3 style="color:var(--gold);font-size:0.85rem;margin-bottom:10px;">Con alineación registrada</h3>';
+      for (const m of matchesWithLineup) {
+        const teams = Object.keys(m.lineup).join(' vs ');
+        html += `<div onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-card-inner)'" onmouseout="this.style.background='var(--bg-card)'">
+          <div>
+            <div style="font-weight:700;">${m.local} vs ${m.visitante}</div>
+            <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha} • ${m.jornada || ''}</div>
+          </div>
+          <div style="font-size:0.75rem;color:var(--gold);">${teams}</div>
+        </div>`;
+      }
+    }
+
+    if (matchesWithout.length > 0 && (isAdmin() || isSuperuser() || isDelegado())) {
+      html += '<h3 style="color:var(--white-muted);font-size:0.85rem;margin:20px 0 10px;">Sin alineación</h3>';
+      for (const m of matchesWithout) {
+        html += `<div onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+          <div style="font-weight:700;">${m.local} vs ${m.visitante}</div>
+          <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha} • ${m.jornada || ''}</div>
+        </div>`;
+      }
+    }
+
+    if (partidos.length === 0) {
+      html += '<div style="text-align:center;color:var(--white-muted);padding:40px;">No hay partidos en el calendario.</div>';
+    }
+
+    html += '</div>';
+    c.innerHTML = html;
   }
 
   // ── MODALS ──
@@ -1717,6 +2117,16 @@
     editUser,
     saveUser,
     deleteUser,
+
+    // Lineup / Scorecard
+    setLineupSubView,
+    initLineupForMatch,
+    setTurnResult,
+    setDefenseStat,
+    addPlayerToLineup,
+    removePlayerFromLineup,
+    movePlayerInLineup,
+    renderLineupList,
 
     // Legacy aliases
     toggleStats: renderStats
