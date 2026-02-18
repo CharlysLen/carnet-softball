@@ -1150,7 +1150,8 @@
     if (partidos.length === 0) {
       c.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);">
         <p>No hay partidos programados.</p>
-        <button class="btn btn-primary" onclick="Admin.generateDemoData()" style="margin-top:10px;">🎲 Generar Partidos Demo</button>
+        ${!isUsuario() ? `<button class="btn btn-primary" onclick="Admin.openCreateMatch()" style="margin-top:10px;">+ Crear Primer Partido</button>` : ''}
+        <button class="btn btn-secondary" onclick="Admin.generateDemoData()" style="margin-top:10px;margin-left:8px;">🎲 Generar Demo</button>
       </div>`;
       return;
     }
@@ -1174,6 +1175,13 @@
     });
 
     let html = '<div class="calendar-list" style="max-width:800px;margin:0 auto;">';
+
+    // Create match button (admin, superusuario, delegado)
+    if (!isUsuario()) {
+      html += `<div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+        <button class="btn btn-primary" onclick="Admin.openCreateMatch()" style="font-size:0.85rem;">+ Nuevo Partido</button>
+      </div>`;
+    }
 
     let currentMonth = '';
 
@@ -1220,6 +1228,126 @@
 
     html += '</div>';
     c.innerHTML = html;
+  }
+
+  // ── CREATE / EDIT MATCH ──
+  function openCreateMatch(editId) {
+    const c = document.getElementById('main-content');
+    const m = editId ? partidos.find(x => x.id === editId) : null;
+    const today = new Date().toISOString().split('T')[0];
+
+    // Team options — delegado only sees their team as local
+    const teamOptions = equipos.map(e => `<option value="${e.nombre}">${e.nombre}</option>`).join('');
+    const delegadoTeam = getDelegadoTeam();
+    const localOptions = isDelegado() && delegadoTeam
+      ? `<option value="${delegadoTeam.nombre}">${delegadoTeam.nombre}</option>`
+      : teamOptions;
+
+    c.innerHTML = `
+      <div style="max-width:600px;margin:0 auto;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+          <button class="btn btn-secondary" onclick="Admin.switchTab('calendar')" style="font-size:0.8rem;">← Volver</button>
+          <h2 style="font-family:var(--font-display);color:var(--gold);margin:0;">${m ? 'Editar Partido' : 'Nuevo Partido'}</h2>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Equipo Local</label>
+              <select id="match-local" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+                ${localOptions}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Equipo Visitante</label>
+              <select id="match-visitante" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+                ${teamOptions}
+              </select>
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Fecha</label>
+              <input type="date" id="match-fecha" value="${m ? m.fecha : today}" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Hora</label>
+              <input type="time" id="match-hora" value="${m ? m.hora : '10:00'}" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Campo / Ubicación</label>
+              <input type="text" id="match-campo" value="${m ? m.campo : ''}" placeholder="Ej: Campo Municipal" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+            </div>
+            <div>
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Jornada</label>
+              <input type="text" id="match-jornada" value="${m ? m.jornada : ''}" placeholder="Ej: Jornada 5" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+            </div>
+            <div style="grid-column:1/-1;">
+              <label style="font-size:0.75rem;color:var(--white-muted);font-weight:600;">Árbitro</label>
+              <input type="text" id="match-arbitro" value="${m ? (m.arbitro || '') : ''}" placeholder="Nombre del árbitro" style="width:100%;padding:10px;border-radius:8px;background:var(--bg-card-inner);color:white;border:1px solid rgba(255,255,255,0.1);font-size:0.9rem;margin-top:4px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;">
+            <button class="btn btn-secondary" onclick="Admin.switchTab('calendar')">Cancelar</button>
+            <button class="btn btn-primary" onclick="Admin.saveNewMatch('${editId || ''}')">${m ? 'Guardar Cambios' : 'Crear Partido'}</button>
+          </div>
+        </div>
+      </div>`;
+
+    // Set selected values if editing
+    if (m) {
+      document.getElementById('match-local').value = m.local;
+      document.getElementById('match-visitante').value = m.visitante;
+    }
+  }
+
+  function saveNewMatch(editId) {
+    const local = document.getElementById('match-local').value;
+    const visitante = document.getElementById('match-visitante').value;
+    const fecha = document.getElementById('match-fecha').value;
+    const hora = document.getElementById('match-hora').value;
+    const campo = document.getElementById('match-campo').value.trim();
+    const jornada = document.getElementById('match-jornada').value.trim();
+    const arbitro = document.getElementById('match-arbitro').value.trim();
+
+    if (!local || !visitante) { alert('Selecciona ambos equipos.'); return; }
+    if (local === visitante) { alert('Los equipos deben ser diferentes.'); return; }
+    if (!fecha) { alert('Selecciona una fecha.'); return; }
+
+    if (editId) {
+      // Edit existing
+      const m = partidos.find(x => x.id === editId);
+      if (!m) return;
+      m.local = local;
+      m.visitante = visitante;
+      m.fecha = fecha;
+      m.hora = hora;
+      m.campo = campo;
+      m.jornada = jornada;
+      m.arbitro = arbitro;
+    } else {
+      // Create new
+      partidos.push({
+        id: 'match-' + Date.now(),
+        fecha,
+        hora,
+        campo,
+        jornada,
+        local,
+        visitante,
+        arbitro,
+        playerStats: {}
+      });
+    }
+
+    autoSave();
+    switchTab('calendar');
+  }
+
+  function deleteMatch(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    if (!confirm(`¿Eliminar el partido "${m.local} vs ${m.visitante}" del ${m.fecha}? Esta acción no se puede deshacer.`)) return;
+    partidos = partidos.filter(x => x.id !== matchId);
+    autoSave();
+    switchTab('calendar');
   }
 
   // ── MATCH DETAIL VIEW (MVP & STATS) ──
@@ -1305,6 +1433,8 @@
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-secondary" onclick="Admin.backToCalendar()">← Volver al Calendario</button>
           ${canEditTeam(m.local) || canEditTeam(m.visitante) ? `
+            <button class="btn btn-secondary" onclick="Admin.openCreateMatch('${m.id}')" title="Editar partido">✏️ Editar</button>
+            <button class="btn btn-danger" onclick="Admin.deleteMatch('${m.id}')" title="Eliminar partido" style="font-size:0.75rem;">🗑️</button>
             <button class="btn btn-secondary" onclick="Admin.downloadMatchTemplate('${m.id}')" style="margin-left:auto;">📥 Descargar Plantilla CSV</button>
             <button class="btn btn-primary" onclick="Admin.openMatchCSV('${m.id}')">📤 Subir Stats CSV</button>
           ` : ''}
@@ -2416,6 +2546,11 @@
     editUser,
     saveUser,
     deleteUser,
+
+    // Match CRUD
+    openCreateMatch,
+    saveNewMatch,
+    deleteMatch,
 
     // Lineup / Scorecard
     setLineupSubView,
