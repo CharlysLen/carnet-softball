@@ -100,6 +100,8 @@
       : teamEmoji + ' ';
 
     const statsHTML = buildStatsSection(player.stats);
+    const pendienteAprobacion = player.aprobado === false;
+    const fechaAltaStr = player.fechaAlta ? new Date(player.fechaAlta + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
     // Bio data
     const height = player.altura ? `${player.altura} m` : '—';
@@ -143,10 +145,15 @@
               </div>
             </div>
 
-            <div class="status-banner ${statusClass}">
-              <div class="status-icon">${statusIcon}</div>
-              <span>${statusText}</span>
-            </div>
+            ${pendienteAprobacion
+              ? `<div class="status-banner suspendido" style="background:rgba(255,160,0,0.15);border-color:rgba(255,160,0,0.3);">
+                  <div class="status-icon" style="color:#ffa000;">${ICONS.warning}</div>
+                  <span style="color:#ffa000;">Pendiente de aprobación</span>
+                </div>`
+              : `<div class="status-banner ${statusClass}">
+                  <div class="status-icon">${statusIcon}</div>
+                  <span>${statusText}</span>
+                </div>`}
 
             <div class="card-footer">
               <div class="verification-note">
@@ -154,7 +161,10 @@
         ? '<span class="blue-text">✓ Verificado</span> — Identidad y edad comprobadas'
         : 'Pendiente de verificación'}
               </div>
-              <div class="player-id">ID: ${player.id}</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <div class="player-id">ID: ${player.id}</div>
+                ${fechaAltaStr ? `<div style="font-size:0.6rem;color:rgba(255,255,255,0.4);">Alta: ${fechaAltaStr}</div>` : ''}
+              </div>
             </div>
             
             <div class="click-hint">Toca la carta para ver detalles</div>

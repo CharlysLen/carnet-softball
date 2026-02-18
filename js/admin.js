@@ -50,9 +50,16 @@
     usuarios = data.usuarios || [];
     applyPermissions();
     renderView();
+    // Migrate photos with black areas from EXIF bug (runs once, auto-detects)
+    migratePhotos().then(() => renderView());
   }
 
-  function getTeamPlayers(n) { return players.filter(p => p.equipo === n); }
+  function getTeamPlayers(n) {
+    const tp = players.filter(p => p.equipo === n);
+    // Usuarios only see approved players; delegados see their own team's pending too
+    if (isUsuario()) return tp.filter(p => p.aprobado !== false);
+    return tp;
+  }
 
   function renderView() {
     renderStats();
@@ -84,20 +91,80 @@
 
   function renderStats() {
     const t = players.length, h = players.filter(p => p.estado === 'habilitado').length, s = t - h;
+    const pending = players.filter(p => p.aprobado === false).length;
     document.getElementById('stats-row').innerHTML = `
       <div class="stat-card"><div class="stat-number">${t}</div><div class="stat-label">Jugadores</div></div>
       <div class="stat-card green"><div class="stat-number">${h}</div><div class="stat-label">Habilitados</div></div>
       <div class="stat-card red"><div class="stat-number">${s}</div><div class="stat-label">Suspendidos</div></div>
-      <div class="stat-card"><div class="stat-number">${equipos.length}</div><div class="stat-label">Equipos</div></div>`;
+      <div class="stat-card"><div class="stat-number">${equipos.length}</div><div class="stat-label">Equipos</div></div>
+      ${pending > 0 && (isAdmin() || isSuperuser()) ? `<div class="stat-card" style="background:rgba(255,160,0,0.15);border-color:rgba(255,160,0,0.3);cursor:pointer;" onclick="document.getElementById('pending-section').scrollIntoView({behavior:'smooth'})"><div class="stat-number" style="color:#ffa000;">${pending}</div><div class="stat-label">Pendientes</div></div>` : ''}`;
+
+    // Render pending approvals section for admin/superusuario
+    renderPendingApprovals();
+  }
+
+  function renderPendingApprovals() {
+    let container = document.getElementById('pending-section');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'pending-section';
+      const statsRow = document.getElementById('stats-row');
+      statsRow.parentNode.insertBefore(container, statsRow.nextSibling);
+    }
+
+    const pendingPlayers = players.filter(p => p.aprobado === false);
+    if (pendingPlayers.length === 0 || (!isAdmin() && !isSuperuser())) {
+      container.innerHTML = '';
+      return;
+    }
+
+    let html = `<div style="background:rgba(255,160,0,0.08);border:1px solid rgba(255,160,0,0.25);border-radius:16px;padding:20px;margin:20px 0;">
+      <h3 style="color:#ffa000;font-family:var(--font-display);margin-bottom:15px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:1.2rem;">🔔</span> Solicitudes Pendientes de Aprobación (${pendingPlayers.length})
+      </h3>`;
+
+    for (const p of pendingPlayers) {
+      const team = equipos.find(e => e.nombre === p.equipo);
+      const teamEmoji = team ? (team.escudo || '🥎') : '🥎';
+      const fechaStr = p.fechaAlta ? new Date(p.fechaAlta + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-card);border-radius:12px;padding:12px 16px;margin-bottom:8px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:40px;height:40px;border-radius:50%;background:rgba(255,160,0,0.2);display:flex;align-items:center;justify-content:center;font-weight:bold;color:#ffa000;">${p.nombre.charAt(0)}</div>
+          <div>
+            <div style="font-weight:600;color:var(--white);">${p.nombre}</div>
+            <div style="font-size:0.75rem;color:var(--white-muted);">${teamEmoji} ${p.equipo} · #${p.dorsal} · ${p.posicion}${fechaStr ? ' · Alta: ' + fechaStr : ''}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-sm btn-success" onclick="Admin.aprobarJugador('${p.id}')" style="padding:6px 16px;">✔ Aprobar</button>
+          <button class="btn btn-sm btn-danger" onclick="Admin.rechazarJugador('${p.id}')" style="padding:6px 16px;">✖ Rechazar</button>
+          <button class="btn btn-sm btn-secondary" onclick="Admin.viewCard('${p.id}')" style="padding:6px 12px;">👁</button>
+        </div>
+      </div>`;
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
   }
 
   function updateTeamDropdown() {
     const s = document.getElementById('inp-equipo');
     if (!s) return;
-    const list = (isAdmin() || isSuperuser()) ? equipos : equipos.filter(e => e.nombre === getCurrentUser().equipo);
-    s.innerHTML = list.length === 0
-      ? '<option value="">— Crea un equipo —</option>'
-      : list.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
+    const container = s.closest('.form-group') || s.parentElement;
+    if (isDelegado()) {
+      // Delegado: auto-assign their team, hide the dropdown
+      const userTeam = getCurrentUser().equipo;
+      s.innerHTML = `<option value="${userTeam}">${userTeam}</option>`;
+      s.value = userTeam;
+      container.style.display = 'none';
+    } else {
+      container.style.display = '';
+      const list = (isAdmin() || isSuperuser()) ? equipos : equipos;
+      s.innerHTML = list.length === 0
+        ? '<option value="">— Crea un equipo —</option>'
+        : list.map(e => `<option value="${e.nombre}">${e.escudo || '🥎'} ${e.nombre}</option>`).join('');
+    }
   }
 
   function renderEmblem(team, size) {
@@ -194,8 +261,11 @@
           : `<span class="roster-initials">${initials}</span>`;
         const avatarBg = p.foto ? '' : `background:linear-gradient(135deg,hsl(${hue},35%,28%),hsl(${hue},30%,18%))`;
 
+        const pendienteAprobacion = p.aprobado === false;
+        const fechaAltaStr = p.fechaAlta ? new Date(p.fechaAlta + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
         html += `
-          <div class="roster-card ${p.estado}" style="--shield-color:${team.color}">
+          <div class="roster-card ${p.estado}${pendienteAprobacion ? ' pendiente' : ''}" style="--shield-color:${team.color}">
             <div class="roster-avatar" style="${avatarBg}">
               ${avatarContent}
               <span class="roster-dorsal-badge">${p.dorsal}</span>
@@ -205,12 +275,16 @@
               <h3 class="roster-player-name">${p.nombre}</h3>
               <span class="roster-position">${p.posicion}</span>
               <div style="font-size:0.6rem;color:var(--white-muted);margin-top:2px;">AVG: ${p.stats && p.stats.avg ? p.stats.avg : '-'}</div>
+              ${fechaAltaStr ? `<div style="font-size:0.55rem;color:var(--white-muted);margin-top:2px;">Alta: ${fechaAltaStr}</div>` : ''}
               ${canEdit && (p.email || p.telefono) ? `<div style="font-size:0.55rem;color:var(--white-muted);margin-top:2px;">${p.email ? '✉ ' + p.email : ''}${p.email && p.telefono ? ' · ' : ''}${p.telefono ? '📞 ' + p.telefono : ''}</div>` : ''}
             </div>
-            <div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>
+            ${pendienteAprobacion
+              ? `<div class="roster-status pendiente"><span class="roster-status-dot"></span>Pendiente de aprobación</div>`
+              : `<div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>`}
             <div class="roster-actions">
               ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>` : ''}
-              ${canToggleStatus() ? `<button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
+              ${pendienteAprobacion && (isAdmin() || isSuperuser()) ? `<button class="btn btn-sm btn-success" onclick="Admin.aprobarJugador('${p.id}')" title="Aprobar jugador">✔ Aprobar</button>` : ''}
+              ${!pendienteAprobacion && canToggleStatus() ? `<button class="btn btn-sm ${isHab ? 'btn-danger' : 'btn-success'}" onclick="Admin.toggleEstado('${p.id}')">${isHab ? '⛔' : '✅'}</button>` : ''}
               <button class="btn btn-sm btn-secondary" onclick="Admin.viewCard('${p.id}')">👁</button>
             </div>
           </div>`;
@@ -234,6 +308,20 @@
     const p = players.find(x => x.id === id); if (!p) return;
     p.verificado = !p.verificado; autoSave(); renderView();
   }
+  function aprobarJugador(id) {
+    if (!isAdmin() && !isSuperuser()) return;
+    const p = players.find(x => x.id === id); if (!p) return;
+    p.aprobado = true;
+    p.estado = 'habilitado';
+    autoSave(); renderView();
+  }
+  function rechazarJugador(id) {
+    if (!isAdmin() && !isSuperuser()) return;
+    const p = players.find(x => x.id === id); if (!p) return;
+    if (!confirm(`¿Rechazar y eliminar a ${p.nombre} del equipo ${p.equipo}?`)) return;
+    players = players.filter(x => x.id !== id);
+    autoSave(); renderView();
+  }
   function generateId() {
     if (players.length === 0) return '001';
     return String(Math.max(...players.map(p => parseInt(p.id, 10) || 0)) + 1).padStart(3, '0');
@@ -242,20 +330,81 @@
   // ── PHOTO UPLOAD ──
   function readFileAsDataURL(file, maxW) {
     return new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onload = e => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const s = Math.min(1, maxW / img.width);
-          canvas.width = img.width * s; canvas.height = img.height * s;
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/webp', 0.75));
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
+      // Use createImageBitmap for proper EXIF orientation handling
+      createImageBitmap(file).then(bitmap => {
+        const canvas = document.createElement('canvas');
+        const s = Math.min(1, maxW / bitmap.width);
+        canvas.width = bitmap.width * s;
+        canvas.height = bitmap.height * s;
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/webp', 0.75));
+      });
     });
+  }
+
+  // Auto-crop black areas from photos saved with EXIF orientation bug
+  function cropBlackAreas(dataURL) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+        // Find rightmost non-black column
+        let rightEdge = canvas.width;
+        for (let x = canvas.width - 1; x >= 0; x--) {
+          let hasContent = false;
+          for (let y = 0; y < canvas.height; y += 4) {
+            const i = (y * canvas.width + x) * 4;
+            if (data[i] > 10 || data[i + 1] > 10 || data[i + 2] > 10) {
+              hasContent = true; break;
+            }
+          }
+          if (hasContent) { rightEdge = x + 1; break; }
+        }
+
+        // Find bottom non-black row
+        let bottomEdge = canvas.height;
+        for (let y = canvas.height - 1; y >= 0; y--) {
+          let hasContent = false;
+          for (let x = 0; x < canvas.width; x += 4) {
+            const i = (y * canvas.width + x) * 4;
+            if (data[i] > 10 || data[i + 1] > 10 || data[i + 2] > 10) {
+              hasContent = true; break;
+            }
+          }
+          if (hasContent) { bottomEdge = y + 1; break; }
+        }
+
+        // Only crop if we detected significant black area (>15% of dimension)
+        if (rightEdge < canvas.width * 0.85 || bottomEdge < canvas.height * 0.85) {
+          const cropped = document.createElement('canvas');
+          cropped.width = rightEdge;
+          cropped.height = bottomEdge;
+          cropped.getContext('2d').drawImage(canvas, 0, 0, rightEdge, bottomEdge, 0, 0, rightEdge, bottomEdge);
+          resolve(cropped.toDataURL('image/webp', 0.75));
+        } else {
+          resolve(null); // No significant black area, keep original
+        }
+      };
+      img.src = dataURL;
+    });
+  }
+
+  // Migrate existing photos to remove black areas (runs once)
+  async function migratePhotos() {
+    let changed = false;
+    for (const p of players) {
+      if (p.foto && p.foto.startsWith('data:')) {
+        const cropped = await cropBlackAreas(p.foto);
+        if (cropped) { p.foto = cropped; changed = true; }
+      }
+    }
+    if (changed) { autoSave(); console.log('Photos migrated: black areas removed'); }
   }
   function handlePlayerPhotoChange() {
     const f = document.getElementById('inp-foto').files[0];
@@ -362,6 +511,18 @@
       pendingPlayerPhoto = '';
     }
     document.getElementById('inp-foto').value = '';
+
+    // Show fecha de alta
+    const fechaInfo = document.getElementById('fecha-alta-info');
+    const fechaDisplay = document.getElementById('fecha-alta-display');
+    if (p.fechaAlta) {
+      const fechaStr = new Date(p.fechaAlta + 'T00:00:00').toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+      const aprobadoStr = p.aprobado === false ? ' · Pendiente de aprobación' : ' · Aprobado';
+      fechaDisplay.innerHTML = fechaStr + `<span style="color:${p.aprobado === false ? '#ffa000' : 'var(--green)'};margin-left:4px;">${aprobadoStr}</span>`;
+      fechaInfo.style.display = '';
+    } else {
+      fechaInfo.style.display = 'none';
+    }
 
     // Restrict fields for delegado
     const restricted = isDelegado();
@@ -473,6 +634,7 @@
       }
     } else {
       // CREATE
+      const creadoPorDelegado = isDelegado();
       players.push({
         id: generateId(),
         nombre: document.getElementById('inp-nombre').value.trim(),
@@ -480,16 +642,21 @@
         equipo: eq,
         posicion: document.getElementById('inp-posicion').value,
         foto: pendingPlayerPhoto || '',
-        estado: document.getElementById('inp-estado').value,
-        verificado: document.getElementById('inp-verificado').value === 'true',
+        estado: creadoPorDelegado ? 'suspendido' : document.getElementById('inp-estado').value,
+        verificado: creadoPorDelegado ? false : document.getElementById('inp-verificado').value === 'true',
         altura: document.getElementById('inp-altura').value.trim(),
         peso: document.getElementById('inp-peso').value.trim(),
         edad: document.getElementById('inp-edad').value.trim(),
         email: document.getElementById('inp-email').value.trim(),
         telefono: document.getElementById('inp-telefono').value.trim(),
         temporada: new Date().getFullYear().toString(),
+        fechaAlta: new Date().toISOString().split('T')[0],
+        aprobado: creadoPorDelegado ? false : true,
         stats: stats
       });
+      if (creadoPorDelegado) {
+        alert('Jugador creado como pendiente de aprobación. Un superusuario o admin debe aprobar su inclusión en el equipo.');
+      }
     }
 
     pendingPlayerPhoto = ''; autoSave(); closeModal('modal-add-player'); renderView();
@@ -516,6 +683,7 @@
     document.getElementById('inp-id').value = '';
     document.getElementById('add-player-form').reset();
     document.getElementById('foto-preview').style.display = 'none';
+    document.getElementById('fecha-alta-info').style.display = 'none';
     pendingPlayerPhoto = '';
     // Re-enable fields that may have been disabled for delegado
     ['inp-estado', 'inp-verificado', 'inp-avg', 'inp-hr', 'inp-rbi', 'inp-h', 'inp-ab', 'inp-r'].forEach(id => {
@@ -570,6 +738,8 @@
         id: generateId(), nombre: row.nombre, dorsal: row.dorsal, equipo: row.equipo,
         posicion: row.posicion, foto: '', estado: row.estado === 'suspendido' ? 'suspendido' : 'habilitado',
         verificado: false, temporada: new Date().getFullYear().toString(),
+        fechaAlta: new Date().toISOString().split('T')[0],
+        aprobado: true,
         altura: row.altura, peso: row.peso, edad: row.edad,
         stats: { avg: row.avg, hr: row.hr, rbi: row.rbi, h: row.h, ab: row.ab, r: row.r }
       });
@@ -658,6 +828,8 @@
           estado: Math.random() > 0.9 ? 'suspendido' : 'habilitado',
           verificado: Math.random() > 0.5,
           temporada: new Date().getFullYear().toString(),
+          fechaAlta: new Date(new Date().getFullYear(), Math.floor(Math.random() * 3), Math.floor(1 + Math.random() * 28)).toISOString().split('T')[0],
+          aprobado: true,
           altura: (1.70 + Math.random() * 0.3).toFixed(2),
           peso: Math.floor(70 + Math.random() * 40),
           edad: Math.floor(40 + Math.random() * 15),
@@ -1482,6 +1654,8 @@
     // Actions called from HTML
     toggleEstado,
     toggleVerificado,
+    aprobarJugador,
+    rechazarJugador,
     viewCard,
 
     // Edit functions
