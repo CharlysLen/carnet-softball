@@ -2135,3 +2135,76 @@ body.qr-body {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* === SOFTBALL FIELD MAP === */
+.field-spot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  z-index: 2;
+}
+
+.field-spot:hover {
+  transform: translate(-50%, -50%) scale(1.15);
+  z-index: 3;
+}
+
+.field-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 2px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: border-color 0.2s ease;
+}
+
+.field-spot:hover .field-avatar {
+  border-color: var(--gold);
+}
+
+.field-name {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: var(--white);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.field-pos {
+  font-size: 0.5rem;
+  color: var(--gold);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.field-stat {
+  font-size: 0.5rem;
+  color: var(--green);
+  font-family: monospace;
+}
+
+/* Mobile field */
+@media (max-width: 600px) {
+  .field-avatar {
+    width: 28px;
+    height: 28px;
+  }
+  .field-name {
+    font-size: 0.48rem;
+    max-width: 55px;
+  }
+  .field-pos {
+    font-size: 0.42rem;
+  }
+}
+
