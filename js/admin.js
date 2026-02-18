@@ -15,6 +15,7 @@
   let selectedTeam = null;
   let selectedMatchId = null;
   let lineupSubView = 'resumen'; // resumen | local | visitante | bitacora
+  let selectedLineupPlayerId = null; // For per-player editor dropdown
   let csvParsedData = [];
   let pendingPlayerPhoto = '';
   let pendingTeamImage = '';
@@ -94,6 +95,7 @@
     if (view === 'users' && !isAdmin()) return;
     currentView = view;
     selectedTeam = null;
+    selectedLineupPlayerId = null;
     document.querySelectorAll('.nav-link').forEach(l => {
       l.classList.remove('active');
       l.style.color = 'var(--white-muted)';
@@ -1312,16 +1314,18 @@
     c.innerHTML = html;
   }
 
-  function viewMatch(id) {
+  function viewMatch(id, subView) {
     selectedMatchId = id;
+    selectedLineupPlayerId = null;
     currentView = 'match';
-    lineupSubView = 'resumen';
+    lineupSubView = subView || 'resumen';
     renderView();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function setLineupSubView(view) {
     lineupSubView = view;
+    selectedLineupPlayerId = null;
     renderView();
   }
 
@@ -1685,13 +1689,19 @@
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
     if (!m.lineup) m.lineup = {};
-    if (m.lineup[teamName]) return; // already exists
+    if (m.lineup[teamName] && m.lineup[teamName].length > 0) return; // already exists
     const tp = players.filter(p => p.equipo === teamName && p.aprobado !== false);
+    if (tp.length === 0) { alert('No hay jugadores aprobados en ' + teamName); return; }
     m.lineup[teamName] = tp.map((p, i) => ({
       playerId: p.id, order: i + 1, position: p.posicion,
       turns: [], defense: { outs: 0, errors: 0, assists: 0 }
     }));
     autoSave();
+  }
+
+  function selectLineupPlayer(playerId) {
+    selectedLineupPlayerId = playerId;
+    renderView();
   }
 
   function setTurnResult(matchId, teamName, playerId, turnIdx, field, value) {
@@ -1767,11 +1777,13 @@
   function renderLineupEditor(match, teamName) {
     const canEdit = canEditTeam(teamName);
     const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
+    const mid = match.id;
+    const tn = teamName.replace(/'/g, "\\'");
 
     if (lineup.length === 0 && canEdit) {
       return `<div style="text-align:center;padding:40px 20px;">
         <p style="color:var(--white-muted);margin-bottom:16px;">No hay alineación para este equipo.</p>
-        <button class="btn btn-primary" onclick="Admin.initLineupForMatch('${match.id}','${teamName.replace(/'/g, "\\'")}'); Admin.renderView();">
+        <button class="btn btn-primary" onclick="Admin.initLineupForMatch('${mid}','${tn}'); Admin.renderView();">
           📋 Crear Alineación desde Roster
         </button>
       </div>`;
@@ -1801,7 +1813,9 @@
       if (!p) continue;
       const s = calcLineupSummary(entry);
       Object.keys(totals).forEach(k => totals[k] += s[k]);
-      summaryHtml += `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+      const isSelected = selectedLineupPlayerId === entry.playerId;
+      summaryHtml += `<tr style="border-bottom:1px solid rgba(255,255,255,0.03);${canEdit ? 'cursor:pointer;' : ''}${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}"
+        ${canEdit ? `onclick="Admin.selectLineupPlayer('${entry.playerId}')"` : ''}>
         <td style="padding:4px 8px;color:var(--gold);">${entry.order}</td>
         <td style="padding:4px 8px;font-weight:600;">${p.nombre}</td>
         <td style="padding:4px;text-align:center;">${s.pa}</td>
@@ -1837,95 +1851,111 @@
 
     if (!canEdit) return summaryHtml;
 
-    // Editable turn-by-turn cards
+    // Player selector dropdown + single player editor
     let editorHtml = '<div class="lineup-editor">';
-    const mid = match.id;
-    const tn = teamName.replace(/'/g, "\\'");
 
-    for (const entry of lineup) {
-      const p = players.find(x => x.id === entry.playerId);
-      if (!p) continue;
-      const pid = entry.playerId;
+    // Dropdown to select player
+    editorHtml += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+      <label style="font-size:0.8rem;color:var(--white-muted);white-space:nowrap;">Editar jugador:</label>
+      <select onchange="Admin.selectLineupPlayer(this.value)"
+        style="flex:1;padding:8px 12px;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-size:0.85rem;">
+        <option value="">— Seleccionar jugador —</option>
+        ${lineup.map(entry => {
+          const p = players.find(x => x.id === entry.playerId);
+          if (!p) return '';
+          const s = calcLineupSummary(entry);
+          return `<option value="${entry.playerId}" ${selectedLineupPlayerId === entry.playerId ? 'selected' : ''}>#${entry.order} ${p.nombre} (${s.h}-${s.ab})</option>`;
+        }).join('')}
+      </select>
+    </div>`;
 
-      editorHtml += `<div class="lineup-player-card" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid rgba(255,255,255,0.05);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${entry.order}</span>
-            <span style="font-weight:700;">${p.nombre}</span>
-            <span style="font-size:0.7rem;color:var(--white-muted);">(${entry.position})</span>
-          </div>
-          <div style="display:flex;gap:4px;">
-            <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','up')" title="Subir">▲</button>
-            <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','down')" title="Bajar">▼</button>
-            <button class="btn btn-sm btn-danger" onclick="Admin.removePlayerFromLineup('${mid}','${tn}','${pid}')" title="Quitar">✕</button>
+    // Show selected player's editor only
+    const selectedEntry = selectedLineupPlayerId ? lineup.find(e => e.playerId === selectedLineupPlayerId) : null;
+    if (selectedEntry) {
+      const p = players.find(x => x.id === selectedEntry.playerId);
+      if (p) {
+        const pid = selectedEntry.playerId;
+        editorHtml += `<div class="lineup-player-card" style="background:rgba(245,166,35,0.05);border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid rgba(245,166,35,0.2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${selectedEntry.order}</span>
+              <span style="font-weight:700;font-size:1rem;">${p.nombre}</span>
+              <span style="font-size:0.75rem;color:var(--white-muted);">(${selectedEntry.position})</span>
+            </div>
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','up')" title="Subir">▲</button>
+              <button class="btn btn-sm btn-secondary" onclick="Admin.movePlayerInLineup('${mid}','${tn}','${pid}','down')" title="Bajar">▼</button>
+              <button class="btn btn-sm btn-danger" onclick="Admin.removePlayerFromLineup('${mid}','${tn}','${pid}')" title="Quitar">✕</button>
+            </div>
+          </div>`;
+
+        // 5 turns
+        for (let t = 0; t < 5; t++) {
+          const turn = selectedEntry.turns[t] || { result: '', sb: false, run: false, rbi: 0, direction: '' };
+          editorHtml += `<div style="margin-bottom:6px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;">
+            <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:5px;font-weight:600;">Turno ${t + 1}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">`;
+
+          for (const code of TURN_RESULTS) {
+            const active = turn.result === code;
+            const color = active ? TURN_RESULT_COLORS[code] : 'transparent';
+            const border = active ? TURN_RESULT_COLORS[code] : 'rgba(255,255,255,0.15)';
+            editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'result','${code}')"
+              style="padding:4px 10px;font-size:0.75rem;font-weight:700;border-radius:6px;border:1px solid ${border};
+              background:${color};color:${active ? '#fff' : 'var(--white-muted)'};cursor:pointer;min-width:32px;">
+              ${TURN_RESULT_LABELS[code]}</button>`;
+          }
+          editorHtml += `</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">`;
+
+          const sbActive = turn.sb ? 'background:var(--blue-check);color:#fff;' : '';
+          const runActive = turn.run ? 'background:var(--green);color:#fff;' : '';
+          editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'sb','')"
+            style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${sbActive}">S</button>`;
+          editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'run','')"
+            style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runActive}">A</button>`;
+
+          editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
+            style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
+            <option value="0" ${turn.rbi === 0 ? 'selected' : ''}>I:0</option>
+            <option value="1" ${turn.rbi === 1 ? 'selected' : ''}>I:1</option>
+            <option value="2" ${turn.rbi === 2 ? 'selected' : ''}>I:2</option>
+            <option value="3" ${turn.rbi === 3 ? 'selected' : ''}>I:3</option>
+            <option value="4" ${turn.rbi === 4 ? 'selected' : ''}>I:4</option>
+          </select>`;
+
+          editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'direction',this.value)"
+            style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
+            <option value="" ${!turn.direction ? 'selected' : ''}>D:-</option>
+            <option value="LF" ${turn.direction === 'LF' ? 'selected' : ''}>LF</option>
+            <option value="CF" ${turn.direction === 'CF' ? 'selected' : ''}>CF</option>
+            <option value="RF" ${turn.direction === 'RF' ? 'selected' : ''}>RF</option>
+          </select>`;
+
+          editorHtml += `</div></div>`;
+        }
+
+        // Defense
+        editorHtml += `<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;">
+          <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:5px;font-weight:600;">Defensa</div>
+          <div style="display:flex;gap:12px;">
+            <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">O: <input type="number" min="0" max="99" value="${selectedEntry.defense.outs}"
+              onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','outs',this.value)"
+              style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
+            <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">E: <input type="number" min="0" max="99" value="${selectedEntry.defense.errors}"
+              onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','errors',this.value)"
+              style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
+            <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">A: <input type="number" min="0" max="99" value="${selectedEntry.defense.assists}"
+              onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','assists',this.value)"
+              style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
           </div>
         </div>`;
 
-      // 5 turns
-      for (let t = 0; t < 5; t++) {
-        const turn = entry.turns[t] || { result: '', sb: false, run: false, rbi: 0, direction: '' };
-        editorHtml += `<div style="margin-bottom:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:8px;">
-          <div style="font-size:0.65rem;color:var(--white-muted);margin-bottom:4px;">Turno ${t + 1}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px;">`;
-
-        for (const code of TURN_RESULTS) {
-          const active = turn.result === code;
-          const color = active ? TURN_RESULT_COLORS[code] : 'transparent';
-          const border = active ? TURN_RESULT_COLORS[code] : 'rgba(255,255,255,0.15)';
-          editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'result','${code}')"
-            style="padding:3px 7px;font-size:0.7rem;font-weight:700;border-radius:4px;border:1px solid ${border};
-            background:${color};color:${active ? '#fff' : 'var(--white-muted)'};cursor:pointer;min-width:28px;">
-            ${TURN_RESULT_LABELS[code]}</button>`;
-        }
-        editorHtml += `</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">`;
-
-        // S, A flags
-        const sbActive = turn.sb ? 'background:var(--blue-check);color:#fff;' : '';
-        const runActive = turn.run ? 'background:var(--green);color:#fff;' : '';
-        editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'sb','')"
-          style="padding:2px 6px;font-size:0.65rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${sbActive}">S</button>`;
-        editorHtml += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'run','')"
-          style="padding:2px 6px;font-size:0.65rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runActive}">A</button>`;
-
-        // RBI
-        editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
-          style="padding:2px 4px;font-size:0.65rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
-          <option value="0" ${turn.rbi === 0 ? 'selected' : ''}>I:0</option>
-          <option value="1" ${turn.rbi === 1 ? 'selected' : ''}>I:1</option>
-          <option value="2" ${turn.rbi === 2 ? 'selected' : ''}>I:2</option>
-          <option value="3" ${turn.rbi === 3 ? 'selected' : ''}>I:3</option>
-          <option value="4" ${turn.rbi === 4 ? 'selected' : ''}>I:4</option>
-        </select>`;
-
-        // Direction
-        editorHtml += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'direction',this.value)"
-          style="padding:2px 4px;font-size:0.65rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
-          <option value="" ${!turn.direction ? 'selected' : ''}>D:-</option>
-          <option value="LF" ${turn.direction === 'LF' ? 'selected' : ''}>LF</option>
-          <option value="CF" ${turn.direction === 'CF' ? 'selected' : ''}>CF</option>
-          <option value="RF" ${turn.direction === 'RF' ? 'selected' : ''}>RF</option>
-        </select>`;
-
-        editorHtml += `</div></div>`;
+        editorHtml += '</div>'; // close player card
       }
-
-      // Defense
-      editorHtml += `<div style="margin-top:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;">
-        <div style="font-size:0.65rem;color:var(--white-muted);margin-bottom:4px;">Defensa</div>
-        <div style="display:flex;gap:10px;">
-          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">O: <input type="number" min="0" max="99" value="${entry.defense.outs}"
-            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','outs',this.value)"
-            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
-          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">E: <input type="number" min="0" max="99" value="${entry.defense.errors}"
-            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','errors',this.value)"
-            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
-          <label style="font-size:0.7rem;display:flex;align-items:center;gap:4px;">A: <input type="number" min="0" max="99" value="${entry.defense.assists}"
-            onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','assists',this.value)"
-            style="width:40px;padding:2px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
-        </div>
+    } else {
+      editorHtml += `<div style="text-align:center;padding:20px;color:var(--white-muted);font-size:0.85rem;border:1px dashed rgba(255,255,255,0.1);border-radius:12px;">
+        Selecciona un jugador del desplegable o haz clic en una fila de la tabla para editar sus turnos.
       </div>`;
-
-      editorHtml += '</div>'; // close player card
     }
 
     // Add player button
@@ -1933,11 +1963,12 @@
     const inLineup = lineup.map(e => e.playerId);
     const available = teamPlayers.filter(p => !inLineup.includes(p.id));
     if (available.length > 0) {
-      editorHtml += `<div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
-        <select id="lineup-add-${match.id}-${teamName.replace(/\s/g, '_')}" style="flex:1;padding:8px;background:var(--bg-card);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:8px;">
+      const selId = 'lineup-add-' + mid + '-' + teamName.replace(/\s/g, '_');
+      editorHtml += `<div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <select id="${selId}" style="flex:1;padding:8px;background:var(--bg-card);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:8px;">
           ${available.map(p => `<option value="${p.id}">#${p.dorsal} ${p.nombre}</option>`).join('')}
         </select>
-        <button class="btn btn-sm btn-primary" onclick="Admin.addPlayerToLineup('${mid}','${tn}',document.getElementById('lineup-add-${match.id}-${teamName.replace(/\s/g, '_')}').value)">+ Añadir</button>
+        <button class="btn btn-sm btn-primary" onclick="Admin.addPlayerToLineup('${mid}','${tn}',document.getElementById('${selId}').value)">+ Añadir</button>
       </div>`;
     }
 
@@ -1957,7 +1988,7 @@
       html += '<h3 style="color:var(--gold);font-size:0.85rem;margin-bottom:10px;">Con alineación registrada</h3>';
       for (const m of matchesWithLineup) {
         const teams = Object.keys(m.lineup).join(' vs ');
-        html += `<div onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-card-inner)'" onmouseout="this.style.background='var(--bg-card)'">
+        html += `<div onclick="Admin.viewMatch('${m.id}','local')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-card-inner)'" onmouseout="this.style.background='var(--bg-card)'">
           <div>
             <div style="font-weight:700;">${m.local} vs ${m.visitante}</div>
             <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha} • ${m.jornada || ''}</div>
@@ -2126,13 +2157,43 @@
     addPlayerToLineup,
     removePlayerFromLineup,
     movePlayerInLineup,
+    selectLineupPlayer,
     renderLineupList,
 
     // Legacy aliases
     toggleStats: renderStats
   };
 
-  function init() { bindEvents(); loadData(); }
+  // ── COLLAPSIBLE HEADER ON SCROLL ──
+  function initScrollHeader() {
+    const header = document.querySelector('.admin-header');
+    if (!header) return;
+    let lastScrollY = 0;
+    let ticking = false;
+    window.addEventListener('scroll', function () {
+      if (!ticking) {
+        window.requestAnimationFrame(function () {
+          const currentY = window.scrollY;
+          if (currentY > 80 && currentY > lastScrollY) {
+            header.classList.add('header-hidden');
+          } else {
+            header.classList.remove('header-hidden');
+          }
+          // Compact mode when scrolled past threshold
+          if (currentY > 40) {
+            header.classList.add('header-compact');
+          } else {
+            header.classList.remove('header-compact');
+          }
+          lastScrollY = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  }
+
+  function init() { bindEvents(); loadData(); initScrollHeader(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
