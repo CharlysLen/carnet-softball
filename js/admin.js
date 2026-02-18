@@ -2013,6 +2013,7 @@
         </div>
       </div>`;
 
+    if (!entry.turns) entry.turns = [];
     for (let t = 0; t < 5; t++) {
       const turn = entry.turns[t] || { result: '', sb: false, run: false, rbi: 0, direction: '' };
       h += `<div style="margin-bottom:6px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;">
@@ -2046,17 +2047,18 @@
       h += `</div></div>`;
     }
 
-    // Defense
+    // Defense (guard against missing field in old data)
+    const def = entry.defense || { outs: 0, errors: 0, assists: 0 };
     h += `<div style="margin-top:8px;padding:8px 10px;background:rgba(255,255,255,0.03);border-radius:8px;">
       <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:5px;font-weight:600;">Defensa</div>
       <div style="display:flex;gap:12px;">
-        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">O: <input type="number" min="0" max="99" value="${entry.defense.outs}"
+        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">O: <input type="number" min="0" max="99" value="${def.outs || 0}"
           onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','outs',this.value)"
           style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
-        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">E: <input type="number" min="0" max="99" value="${entry.defense.errors}"
+        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">E: <input type="number" min="0" max="99" value="${def.errors || 0}"
           onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','errors',this.value)"
           style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
-        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">A: <input type="number" min="0" max="99" value="${entry.defense.assists}"
+        <label style="font-size:0.75rem;display:flex;align-items:center;gap:4px;">A: <input type="number" min="0" max="99" value="${def.assists || 0}"
           onchange="Admin.setDefenseStat('${mid}','${tn}','${pid}','assists',this.value)"
           style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
       </div>
