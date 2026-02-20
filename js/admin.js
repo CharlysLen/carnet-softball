@@ -2114,19 +2114,24 @@
 
     // Extra panels depending on status
     const lineup2 = match.lineup[teamName];
-    if (st === 'suplente') {
-      // "Entra por" panel — list titulares and lesionados available for substitution
-      const getStatus2 = e => e.status || (e.starter === false ? 'suplente' : 'titular');
-      const candidates = lineup2.filter(e => e.playerId !== playerId && ['titular','lesionado'].includes(getStatus2(e)) && !e.replacedBy);
-      if (candidates.length > 0) {
-        const selId = 'sub-out-' + playerId;
+    const getStatus2 = e => e.status || (e.starter === false ? 'suplente' : 'titular');
+
+    // Titular (or unsubstituted lesionado): show "Reemplazar por" dropdown with available suplentes
+    if ((st === 'titular' || (st === 'lesionado' && !entry.replacedBy))) {
+      const availableSubs = lineup2.filter(e =>
+        e.playerId !== playerId &&
+        getStatus2(e) === 'suplente' &&
+        !e.replacesPlayer
+      );
+      if (availableSubs.length > 0) {
+        const selId = 'sub-in-' + playerId;
         h += `<div style="margin-top:10px;padding:10px 12px;background:rgba(255,152,0,0.06);border-radius:10px;border:1px solid rgba(255,152,0,0.2);">
-          <div style="font-size:0.7rem;color:#ff9800;font-weight:700;margin-bottom:8px;">🔄 CAMBIO — Entra por:</div>
+          <div style="font-size:0.7rem;color:#ff9800;font-weight:700;margin-bottom:8px;">🔄 CAMBIO — Reemplazar por:</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <select id="${selId}" style="flex:1;padding:5px 8px;font-size:0.8rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,152,0,0.3);border-radius:6px;">
-              ${candidates.map(e => { const cp = players.find(x => x.id === e.playerId); return cp ? `<option value="${e.playerId}">#${e.order} ${cp.nombre} (${shortenPosition(e.position)})</option>` : ''; }).join('')}
+              ${availableSubs.map(e => { const cp = players.find(x => x.id === e.playerId); return cp ? `<option value="${e.playerId}">${cp.nombre} (${shortenPosition(e.position)})</option>` : ''; }).join('')}
             </select>
-            <button class="btn btn-sm" onclick="Admin.makeSubstitution('${mid}','${tn}','${pid}',document.getElementById('${selId}').value)"
+            <button class="btn btn-sm" onclick="Admin.makeSubstitution('${mid}','${tn}',document.getElementById('${selId}').value,'${pid}')"
               style="background:#ff9800;color:#000;font-weight:700;white-space:nowrap;">Confirmar</button>
           </div>
         </div>`;
