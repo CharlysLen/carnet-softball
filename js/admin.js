@@ -2253,6 +2253,19 @@
     const fieldStarters = starters.filter(e => !NO_FIELD_POSITIONS.has(e.position));
     const benchStarters = starters.filter(e => NO_FIELD_POSITIONS.has(e.position));
 
+    // Drop zones for every defined field position (z-index 1, behind players)
+    let dropZones = '';
+    if (canEdit) {
+      for (const [posName, pos] of Object.entries(FIELD_POSITIONS)) {
+        dropZones += `<div class="field-drop-zone" data-pos="${posName}"
+          style="left:${pos.x}%;top:${pos.y}%;"
+          ondragover="Admin.onFieldDragOver(event)"
+          ondragenter="this.classList.add('drop-hover')"
+          ondragleave="this.classList.remove('drop-hover')"
+          ondrop="Admin.onFieldDrop(event,'${posName}')"></div>`;
+      }
+    }
+
     // Track used positions to offset duplicates
     const usedPositions = {};
     let spots = '';
@@ -2274,12 +2287,24 @@
         : `<span style="font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.8);">${p.nombre.charAt(0)}</span>`;
       const s = calcLineupSummary(entry);
       const statLine = s.pa > 0 ? `${s.h}-${s.ab}` : '';
+      const lesIcon = getStatus(entry) === 'lesionado' ? '<div style="position:absolute;top:-4px;right:-4px;font-size:0.6rem;">🚑</div>' : '';
 
-      spots += `<div class="field-spot" style="left:${pos.x}%;top:${pos.y}%;"
+      const dragAttrs = canEdit
+        ? `draggable="true"
+           ondragstart="Admin.startFieldDrag('${mid}','${tn}','${entry.playerId}',event)"
+           ondragend="Admin.clearFieldDrag()"
+           ondragover="Admin.onFieldDragOver(event)"
+           ondragenter="this.querySelector('.field-avatar').style.outlineColor='var(--gold)'"
+           ondragleave="this.querySelector('.field-avatar').style.outlineColor=''"
+           ondrop="Admin.onFieldDrop(event,'${entry.position}')"
+           ontouchstart="Admin.touchDragStart(event,'${mid}','${tn}','${entry.playerId}')"` : '';
+
+      spots += `<div class="field-spot" style="left:${pos.x}%;top:${pos.y}%;position:relative;" ${dragAttrs}
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
         <div class="field-avatar" style="border-color:${selectedLineupPlayerId === entry.playerId ? 'var(--gold)' : 'rgba(255,255,255,0.4)'};">
           ${photo}
         </div>
+        ${lesIcon}
         <div class="field-name">${p.nombre.split(' ')[0]}</div>
         <div class="field-pos">${shortenPosition(entry.position)}</div>
         ${statLine ? `<div class="field-stat">${statLine}</div>` : ''}
@@ -2299,6 +2324,7 @@
         <polygon points="196,285 200,280 204,285 204,290 196,290" fill="var(--white)" opacity="0.5"/>
         <circle cx="200" cy="230" r="5" fill="rgba(139,90,43,0.4)" stroke="rgba(255,255,255,0.1)"/>
       </svg>
+      ${dropZones}
       ${spots}
     </div>`;
 
@@ -2338,7 +2364,8 @@
           ? `<img src="${p.foto}" style="width:24px;height:24px;object-fit:cover;border-radius:50%;">`
           : `<span style="font-size:0.55rem;font-weight:700;">${p.nombre.charAt(0)}</span>`;
         const isSelected = selectedLineupPlayerId === entry.playerId;
-        html += `<div onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;cursor:pointer;background:${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isSelected ? 'rgba(245,166,35,0.3)' : 'rgba(255,255,255,0.05)'};transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'}'"}>
+        const dragA = canEdit ? `draggable="true" data-mid="${mid}" data-tn="${tn}" data-pid="${entry.playerId}" ondragstart="Admin.startFieldDrag(this.dataset.mid,this.dataset.tn,this.dataset.pid,event)" ondragend="Admin.clearFieldDrag()" ontouchstart="Admin.touchDragStart(event,this.dataset.mid,this.dataset.tn,this.dataset.pid)"` : "";
+        html += `<div ${dragA} onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;cursor:${canEdit ? 'grab' : 'pointer'};background:${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isSelected ? 'rgba(245,166,35,0.3)' : 'rgba(255,255,255,0.05)'};transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'}'"}>
           <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;background:var(--bg-card);display:flex;align-items:center;justify-content:center;">${photo}</div>
           <div>
             <div style="font-size:0.7rem;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre.split(' ')[0]}</div>
@@ -2675,6 +2702,134 @@
     }
   }
 
+  // ── FIELD DRAG & DROP (mouse + touch) ──
+  let _fieldDrag = null;
+  const _td = { pending: false, active: false, clone: null, matchId: null, teamName: null, playerId: null, startX: 0, startY: 0 };
+
+  function startFieldDrag(matchId, teamName, playerId, event) {
+    _fieldDrag = { matchId, teamName, playerId };
+    if (event && event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', playerId);
+    }
+    document.querySelectorAll('.field-drop-zone').forEach(z => z.classList.add('drag-active'));
+    const spot = event && event.currentTarget;
+    if (spot) spot.classList.add('dragging');
+  }
+
+  function clearFieldDrag() {
+    _fieldDrag = null;
+    document.querySelectorAll('.field-drop-zone').forEach(z => z.classList.remove('drag-active', 'drop-hover'));
+    document.querySelectorAll('.field-spot.dragging').forEach(s => s.classList.remove('dragging'));
+  }
+
+  function dropPlayerToPosition(positionName) {
+    if (!_fieldDrag) return;
+    const { matchId, teamName, playerId } = _fieldDrag;
+    clearFieldDrag();
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
+    const draggedEntry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!draggedEntry) return;
+    // Swap positions with existing titular at that spot
+    const occupant = m.lineup[teamName].find(e =>
+      e.playerId !== playerId && e.position === positionName && getStatus(e) === 'titular'
+    );
+    if (occupant) occupant.position = draggedEntry.position;
+    draggedEntry.position = positionName;
+    const st = getStatus(draggedEntry);
+    if (st === 'suplente' || st === 'ausente') draggedEntry.status = 'titular';
+    autoSave();
+    renderView();
+  }
+
+  function onFieldDragOver(event) {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+  }
+
+  function onFieldDrop(event, positionName) {
+    event.preventDefault();
+    event.currentTarget.classList.remove('drop-hover');
+    dropPlayerToPosition(positionName);
+  }
+
+  // Touch drag (works on mobile)
+  function touchDragStart(event, matchId, teamName, playerId) {
+    event.preventDefault(); // prevents click from firing on touch
+    const touch = event.touches[0];
+    _td.pending = true; _td.active = false;
+    _td.matchId = matchId; _td.teamName = teamName; _td.playerId = playerId;
+    _td.startX = touch.clientX; _td.startY = touch.clientY; _td.clone = null;
+    document.addEventListener('touchmove', _tdMove, { passive: false });
+    document.addEventListener('touchend', _tdEnd, { once: true });
+    document.addEventListener('touchcancel', _tdCancel, { once: true });
+  }
+
+  function _tdMove(event) {
+    if (!_td.pending && !_td.active) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - _td.startX, dy = touch.clientY - _td.startY;
+    if (_td.pending && Math.sqrt(dx * dx + dy * dy) > 10) {
+      _td.pending = false; _td.active = true;
+      event.preventDefault();
+      _fieldDrag = { matchId: _td.matchId, teamName: _td.teamName, playerId: _td.playerId };
+      const p = players.find(x => x.id === _td.playerId);
+      const clone = document.createElement('div');
+      clone.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;width:40px;height:40px;border-radius:50%;background:var(--bg-card);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;opacity:0.9;box-shadow:0 4px 16px rgba(0,0,0,0.6);';
+      if (p && p.foto) clone.innerHTML = `<img src="${p.foto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+      else if (p) clone.innerHTML = `<span style="font-size:0.75rem;font-weight:700;color:var(--gold);">${p.nombre.charAt(0)}</span>`;
+      clone.style.left = (touch.clientX - 20) + 'px';
+      clone.style.top = (touch.clientY - 48) + 'px';
+      document.body.appendChild(clone);
+      _td.clone = clone;
+      document.querySelectorAll('.field-drop-zone').forEach(z => z.classList.add('drag-active'));
+      return;
+    }
+    if (_td.active) {
+      event.preventDefault();
+      if (_td.clone) {
+        _td.clone.style.left = (touch.clientX - 20) + 'px';
+        _td.clone.style.top = (touch.clientY - 48) + 'px';
+      }
+      const underEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      const zone = underEl && underEl.closest('.field-drop-zone[data-pos]');
+      document.querySelectorAll('.field-drop-zone.drop-hover').forEach(z => { if (z !== zone) z.classList.remove('drop-hover'); });
+      if (zone) zone.classList.add('drop-hover');
+    }
+  }
+
+  function _tdEnd(event) {
+    document.removeEventListener('touchmove', _tdMove);
+    if (_td.clone) { document.body.removeChild(_td.clone); _td.clone = null; }
+    if (_td.pending) {
+      _td.pending = false; _td.active = false;
+      selectLineupPlayer(_td.playerId); // treat as tap
+      return;
+    }
+    if (_td.active) {
+      const touch = event.changedTouches[0];
+      const underEl = document.elementFromPoint(touch.clientX, touch.clientY);
+      const zone = underEl && underEl.closest('.field-drop-zone[data-pos]');
+      const positionName = zone && zone.getAttribute('data-pos');
+      _td.active = false;
+      if (positionName) {
+        _fieldDrag = { matchId: _td.matchId, teamName: _td.teamName, playerId: _td.playerId };
+        dropPlayerToPosition(positionName);
+      } else {
+        clearFieldDrag();
+      }
+    }
+  }
+
+  function _tdCancel() {
+    document.removeEventListener('touchmove', _tdMove);
+    if (_td.clone) { document.body.removeChild(_td.clone); _td.clone = null; }
+    _td.pending = false; _td.active = false;
+    clearFieldDrag();
+  }
+
   window.Admin = {
     init,
     renderView,
@@ -2755,6 +2910,12 @@
     setPlayerOrder,
     makeSubstitution,
     setLineupPosition,
+    startFieldDrag,
+    clearFieldDrag,
+    dropPlayerToPosition,
+    onFieldDragOver,
+    onFieldDrop,
+    touchDragStart,
     renderLineupList,
 
     // Legacy aliases

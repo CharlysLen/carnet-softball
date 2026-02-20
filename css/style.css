@@ -2184,3 +2184,30 @@ body.qr-body {
   }
 }
 
+/* ── FIELD DRAG & DROP ── */
+.field-drop-zone {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px dashed transparent;
+  transition: border-color 0.15s, background 0.15s;
+  pointer-events: all;
+  z-index: 1;
+  width: 14%;
+  padding-top: 14%;
+  box-sizing: border-box;
+}
+.field-drop-zone.drag-active {
+  border-color: rgba(245, 166, 35, 0.25);
+  background: rgba(245, 166, 35, 0.04);
+}
+.field-drop-zone.drop-hover {
+  border-color: var(--gold) !important;
+  background: rgba(245, 166, 35, 0.22) !important;
+  box-shadow: 0 0 12px rgba(245, 166, 35, 0.4);
+}
+.field-spot.dragging {
+  opacity: 0.4;
+  transform: translate(-50%, -50%) scale(0.9);
+}
+
