@@ -3048,7 +3048,7 @@
       const recipientOptions = [
         '<option value="all">Todos los usuarios</option>',
         '<option value="all_delegados">Todos los delegados</option>',
-        ...delegList.map(u => `<option value="${u.id}">${u.nombre} (${u.rol})</option>`)
+        ...delegList.map(u => `<option value="${u.id}">${u.equipo || u.nombre} — ${u.rol === 'delegado' ? 'Delegado' : 'Jugador'}</option>`)
       ].join('');
       html += `<div style="background:rgba(245,166,35,0.05);border:1px solid rgba(245,166,35,0.2);border-radius:10px;padding:12px;margin-bottom:14px;">
         <div style="font-size:0.75rem;color:var(--gold);font-weight:700;margin-bottom:8px;">✉️ Nuevo mensaje</div>
