@@ -1993,7 +1993,7 @@
       ausente: { bg: 'rgba(244,67,54,0.15)', color: 'var(--red)', label: 'Ausente', icon: '❌', next: 'titular', nextLabel: 'Titular' }
     };
     const stStyle = STATUS_STYLES[st] || STATUS_STYLES.suplente;
-    const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Utility'];
+    const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Infielder','Outfielder','BA','BD'];
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -2116,14 +2116,23 @@
     'Left Field':   { x: 15, y: 22 },
     'Center Field': { x: 50, y: 10 },
     'Right Field':  { x: 85, y: 22 },
-    'Shortfield':   { x: 50, y: 30 },
-    'Utility':      { x: 50, y: 75 }
+    'Shortfield':   { x: 50, y: 30 }
+    // BA, BD, Infielder, Outfielder are not fielded — shown in bench area
   };
+
+  // Position number mapping (softball standard)
+  const POSITION_NUMBERS = {
+    'Pitcher': '1', 'Catcher': '2', 'Primera Base': '3', 'Segunda Base': '4',
+    'Tercera Base': '5', 'Shortstop': '6', 'Left Field': '7', 'Center Field': '8',
+    'Right Field': '9', 'Shortfield': '10', 'Infielder': 'IF', 'Outfielder': 'OF',
+    'BA': 'BA', 'BD': 'BD'
+  };
+  function posNum(pos) { return POSITION_NUMBERS[pos] || (pos ? pos : '-'); }
 
   function shortenPosition(pos) {
     return (pos || '').replace('Primera Base','1B').replace('Segunda Base','2B').replace('Tercera Base','3B')
       .replace('Left Field','LF').replace('Center Field','CF').replace('Right Field','RF')
-      .replace('Shortfield','SF').replace('Shortstop','SS');
+      .replace('Shortfield','SF').replace('Shortstop','SS').replace('Infielder','IF').replace('Outfielder','OF');
   }
 
   function setLineupPosition(matchId, teamName, playerId, position) {
@@ -2162,15 +2171,22 @@
     const mid = match.id;
     const tn = teamName.replace(/'/g, "\\'");
 
+    // Positions not shown on field (no defense) — go to bench section
+    const NO_FIELD_POSITIONS = new Set(['BA', 'BD', 'Infielder', 'Outfielder']);
+    // Separate field starters from BA/BD starters
+    const fieldStarters = starters.filter(e => !NO_FIELD_POSITIONS.has(e.position));
+    const benchStarters = starters.filter(e => NO_FIELD_POSITIONS.has(e.position));
+
     // Track used positions to offset duplicates
     const usedPositions = {};
     let spots = '';
-    for (const entry of starters) {
+    for (const entry of fieldStarters) {
       const p = players.find(x => x.id === entry.playerId);
       if (!p) continue;
-      let pos = FIELD_POSITIONS[entry.position] || FIELD_POSITIONS['Utility'];
+      let pos = FIELD_POSITIONS[entry.position];
+      if (!pos) continue; // skip unknown field positions
       // Offset duplicates slightly
-      const posKey = entry.position || 'Utility';
+      const posKey = entry.position || 'unknown';
       if (usedPositions[posKey]) {
         usedPositions[posKey]++;
         pos = { x: pos.x + (usedPositions[posKey] % 2 === 0 ? 6 : -6), y: pos.y + (usedPositions[posKey] > 2 ? 8 : -2) };
@@ -2210,12 +2226,36 @@
       ${spots}
     </div>`;
 
-    // Bench / Suplentes section
-    if (subs.length > 0) {
-      html += `<div style="margin:0 auto 16px;max-width:500px;background:rgba(255,255,255,0.02);border-radius:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.05);">
-        <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:6px;font-weight:600;letter-spacing:1px;">SUPLENTES (${subs.length})</div>
+    // BA / BD titulares (no van al campo defensivamente)
+    if (benchStarters.length > 0) {
+      html += `<div style="margin:0 auto 8px;max-width:500px;background:rgba(245,166,35,0.04);border-radius:10px;padding:8px 12px;border:1px solid rgba(245,166,35,0.12);">
+        <div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px;font-weight:600;letter-spacing:1px;">BATEADORES (${benchStarters.length})</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
-      for (const entry of subs) {
+      for (const entry of benchStarters) {
+        const p = players.find(x => x.id === entry.playerId);
+        if (!p) continue;
+        const photo = p.foto
+          ? `<img src="${p.foto}" style="width:24px;height:24px;object-fit:cover;border-radius:50%;">`
+          : `<span style="font-size:0.55rem;font-weight:700;">${p.nombre.charAt(0)}</span>`;
+        const isSelected = selectedLineupPlayerId === entry.playerId;
+        html += `<div onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;cursor:pointer;background:${isSelected ? 'rgba(245,166,35,0.15)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isSelected ? 'rgba(245,166,35,0.3)' : 'rgba(255,255,255,0.05)'};">
+          <div style="width:24px;height:24px;border-radius:50%;overflow:hidden;background:var(--bg-card);display:flex;align-items:center;justify-content:center;">${photo}</div>
+          <div>
+            <div style="font-size:0.7rem;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre.split(' ')[0]}</div>
+            <div style="font-size:0.55rem;color:var(--gold);font-weight:700;">${entry.position}</div>
+          </div>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+
+    // Bench / Suplentes section
+    const allSubs = [...subs];
+    if (allSubs.length > 0) {
+      html += `<div style="margin:0 auto 16px;max-width:500px;background:rgba(255,255,255,0.02);border-radius:10px;padding:8px 12px;border:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:0.7rem;color:var(--white-muted);margin-bottom:6px;font-weight:600;letter-spacing:1px;">SUPLENTES (${allSubs.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
+      for (const entry of allSubs) {
         const p = players.find(x => x.id === entry.playerId);
         if (!p) continue;
         const photo = p.foto
@@ -2284,6 +2324,8 @@
       <table id="lineup-summary-table" style="width:100%;border-collapse:collapse;font-size:0.75rem;">
         <thead><tr style="background:rgba(255,255,255,0.05);">
           <th style="padding:6px 8px;text-align:left;">#</th>
+          <th style="padding:6px 4px;text-align:center;">No</th>
+          <th style="padding:6px 4px;text-align:center;">Pos</th>
           <th style="padding:6px 8px;text-align:left;">Jugador</th>
           <th style="padding:6px 4px;">PA</th><th style="padding:6px 4px;">AB</th>
           <th style="padding:6px 4px;">H</th><th style="padding:6px 4px;">2B</th>
@@ -2307,7 +2349,9 @@
       const rowOpacity = pStatus === 'ausente' ? 'opacity:0.35;' : pStatus === 'suplente' ? 'opacity:0.5;' : '';
       html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${rowOpacity}"
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
-        <td style="padding:4px 8px;color:var(--gold);">${entry.order}</td>
+        <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${entry.order}</td>
+        <td style="padding:4px;text-align:center;color:var(--white-muted);font-size:0.7rem;">${p.dorsal || '-'}</td>
+        <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
         <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${statusTag}</td>
         <td style="padding:4px;text-align:center;">${s.pa}</td>
         <td style="padding:4px;text-align:center;">${s.ab}</td>
@@ -2325,7 +2369,7 @@
     }
     const tAvg = totals.ab > 0 ? (totals.h / totals.ab).toFixed(3).replace(/^0+/, '') : '.000';
     html += `<tr style="border-top:2px solid var(--gold);font-weight:700;">
-      <td colspan="2" style="padding:6px 8px;">TOTALES</td>
+      <td colspan="4" style="padding:6px 8px;">TOTALES</td>
       <td style="padding:4px;text-align:center;">${totals.pa}</td>
       <td style="padding:4px;text-align:center;">${totals.ab}</td>
       <td style="padding:4px;text-align:center;">${totals.h}</td>
