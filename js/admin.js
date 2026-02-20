@@ -2049,7 +2049,7 @@
       turn.direction = value;
     }
     const _lp = players.find(x => x.id === playerId);
-    const _ln = _lp ? _lp.nombre.split(' ')[0] : playerId;
+    const _ln = _lp ? `${_lp.nombre.split(' ')[0]} #${_lp.dorsal || '?'}` : playerId;
     if (field === 'result' && turn.result) {
       logChange(matchId, 'turn_result', `${_ln} (${teamName.split(' ')[0]}): turno ${turnIdx + 1} → ${turn.result}`);
     } else if (field === 'sb' || field === 'run') {
@@ -2072,7 +2072,7 @@
     if (!entry) return;
     entry.defense[field] = parseInt(value, 10) || 0;
     const _dp = players.find(x => x.id === playerId);
-    const _dn = _dp ? _dp.nombre.split(' ')[0] : playerId;
+    const _dn = _dp ? `${_dp.nombre.split(' ')[0]} #${_dp.dorsal || '?'}` : playerId;
     logChange(matchId, 'defense_change', `${_dn}: defensa ${field} → ${value}`);
     autoSave();
   }
@@ -2332,7 +2332,7 @@
     entry.status = order[cur] || 'suplente';
     delete entry.starter; // migrate away from old field
     const _sp = players.find(x => x.id === playerId);
-    const _sn = _sp ? _sp.nombre.split(' ')[0] : playerId;
+    const _sn = _sp ? `${_sp.nombre.split(' ')[0]} #${_sp.dorsal || '?'}` : playerId;
     logChange(matchId, 'status_change', `${_sn}: ${cur} → ${entry.status}`);
     autoSave();
     renderView();
@@ -2348,7 +2348,7 @@
     if (isNaN(n) || n < 1) return;
     entry.order = n;
     const _op = players.find(x => x.id === playerId);
-    const _on = _op ? _op.nombre.split(' ')[0] : playerId;
+    const _on = _op ? `${_op.nombre.split(' ')[0]} #${_op.dorsal || '?'}` : playerId;
     logChange(matchId, 'order_change', `${_on}: turno de bateo → ${n}`);
     autoSave();
     renderView();
@@ -2369,9 +2369,9 @@
     subEntry.replacesPlayer = outPlayerId;
     const _outP = players.find(x => x.id === outPlayerId);
     const _subP = players.find(x => x.id === subPlayerId);
-    const _outN = _outP ? _outP.nombre.split(' ')[0] : outPlayerId;
-    const _subN = _subP ? _subP.nombre.split(' ')[0] : subPlayerId;
-    logChange(matchId, 'substitution', `Sustitución (${teamName.split(' ')[0]}): sale ${_outN} #${inheritedOrder}, entra ${_subN}`);
+    const _outN = _outP ? `${_outP.nombre.split(' ')[0]} #${_outP.dorsal || '?'}` : outPlayerId;
+    const _subN = _subP ? `${_subP.nombre.split(' ')[0]} #${_subP.dorsal || '?'}` : subPlayerId;
+    logChange(matchId, 'substitution', `Sustitución (${teamName.split(' ')[0]}): sale ${_outN}, entra ${_subN}`);
     autoSave();
     renderView();
   }
@@ -2896,7 +2896,7 @@
     const st = getStatus(draggedEntry);
     if (st === 'suplente' || st === 'ausente') draggedEntry.status = 'titular';
     const _pp = players.find(x => x.id === playerId);
-    const _pn = _pp ? _pp.nombre.split(' ')[0] : playerId;
+    const _pn = _pp ? `${_pp.nombre.split(' ')[0]} #${_pp.dorsal || '?'}` : playerId;
     logChange(matchId, 'position_change', `${_pn}: ${_oldPos || '?'} → ${positionName}`);
     autoSave();
     renderView();
