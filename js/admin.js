@@ -2120,8 +2120,8 @@
     'Center Field': { x: 50, y: 10 },
     'Right Field':  { x: 85, y: 22 },
     'Shortfield':   { x: 50, y: 30 },
-    'BA':           { x: 42, y: 74 },
-    'BD':           { x: 58, y: 74 }
+    'BA':           { x: 92, y: 60 },
+    'BD':           { x: 92, y: 75 }
     // Infielder, Outfielder are not fielded — shown in bench area
   };
 
