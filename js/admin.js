@@ -1500,9 +1500,11 @@
         <!-- Sub-tabs -->
         <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
           ${['resumen', 'local', 'visitante', 'bitacora'].map(tab => {
-            const pendingLogs = (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length;
-            const bitacoraLabel = pendingLogs > 0
-              ? `📝 Bitácora <span style="background:var(--gold);color:#000;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${pendingLogs}</span>`
+            const pendingLogs = (isAdmin() || isSuperuser()) ? (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length : 0;
+            const unreadMsgs = getUnreadMsgCount(m);
+            const totalBadge = pendingLogs + unreadMsgs;
+            const bitacoraLabel = totalBadge > 0
+              ? `📝 Bitácora <span style="background:${unreadMsgs > 0 ? '#e53935' : 'var(--gold)'};color:#fff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${totalBadge}</span>`
               : '📝 Bitácora';
             const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
             const active = lineupSubView === tab;
@@ -1587,6 +1589,7 @@
   function setLineupSubView(view) {
     lineupSubView = view;
     selectedLineupPlayerId = null;
+    if (view === 'bitacora' && selectedMatchId) markMessagesRead(selectedMatchId);
     renderView();
   }
 
@@ -3027,6 +3030,36 @@
     if (reqPanel) reqPanel.innerHTML = '<div style="font-size:0.8rem;color:var(--green);padding:8px 0;">✓ Mensaje enviado al supervisor.</div>';
   }
 
+  // Track last time current user viewed the messages of a match (sessionStorage, per-browser)
+  function getLastSeenMessages(matchId) {
+    try { return JSON.parse(sessionStorage.getItem('msg_seen') || '{}')[matchId] || 0; }
+    catch(e) { return 0; }
+  }
+
+  function markMessagesRead(matchId) {
+    try {
+      const s = JSON.parse(sessionStorage.getItem('msg_seen') || '{}');
+      s[matchId] = Date.now();
+      sessionStorage.setItem('msg_seen', JSON.stringify(s));
+    } catch(e) {}
+  }
+
+  function getUnreadMsgCount(m) {
+    if (!m || !m.mensajes) return 0;
+    const lastSeen = getLastSeenMessages(m.id);
+    const cu = getCurrentUser();
+    let count = 0;
+    for (const msg of m.mensajes) {
+      if (!canSeeMsg(msg) || msg.from === cu.id) continue;
+      if (msg.timestamp > lastSeen) count++;
+      // New replies from others on messages I can see
+      for (const r of (msg.replies || [])) {
+        if (r.from !== cu.id && r.timestamp > lastSeen) count++;
+      }
+    }
+    return count;
+  }
+
   function renderMatchMessages(m) {
     if (typeof m === 'string') m = partidos.find(x => x.id === m);
     if (!m) return '';
@@ -3037,18 +3070,29 @@
 
     let html = '';
 
+    // ── Unread notification banner ──
+    const unread = getUnreadMsgCount(m);
+    if (unread > 0) {
+      html += `<div style="display:flex;align-items:center;gap:10px;background:rgba(229,57,53,0.12);border:1px solid rgba(229,57,53,0.35);border-radius:10px;padding:10px 14px;margin-bottom:12px;animation:livePulse 2s ease-in-out infinite;">
+        <span style="font-size:1.2rem;">🔔</span>
+        <div>
+          <div style="font-size:0.82rem;font-weight:700;color:#ef5350;">Tienes ${unread} mensaje${unread !== 1 ? 's' : ''} nuevo${unread !== 1 ? 's' : ''}</div>
+          <div style="font-size:0.68rem;color:var(--white-muted);">Desplázate para ver los mensajes sin leer</div>
+        </div>
+      </div>`;
+    }
+
     // ── Super compose panel ──
     if (canSuper) {
-      // Only show users/delegados from the two teams playing this match
+      // Only delegados from the two teams playing this match
       const matchTeams = [m.local, m.visitante].map(t => (t || '').toLowerCase());
       const delegList = usuarios.filter(u =>
-        (u.rol === 'delegado' || u.rol === 'usuario') &&
+        u.rol === 'delegado' &&
         matchTeams.some(t => t && (u.equipo || '').toLowerCase() === t)
       );
       const recipientOptions = [
-        '<option value="all">Todos los usuarios</option>',
-        '<option value="all_delegados">Todos los delegados</option>',
-        ...delegList.map(u => `<option value="${u.id}">${u.equipo || u.nombre} — ${u.rol === 'delegado' ? 'Delegado' : 'Jugador'}</option>`)
+        '<option value="all_delegados">Todos los delegados del partido</option>',
+        ...delegList.map(u => `<option value="${u.id}">${u.equipo || u.nombre} — Delegado</option>`)
       ].join('');
       html += `<div style="background:rgba(245,166,35,0.05);border:1px solid rgba(245,166,35,0.2);border-radius:10px;padding:12px;margin-bottom:14px;">
         <div style="font-size:0.75rem;color:var(--gold);font-weight:700;margin-bottom:8px;">✉️ Nuevo mensaje</div>
@@ -3073,15 +3117,20 @@
     if (msgs.length === 0) {
       html += '<div style="font-size:0.8rem;color:var(--white-muted);text-align:center;padding:12px 0;">Sin mensajes aún.</div>';
     }
+    const lastSeen = getLastSeenMessages(m.id);
     for (const msg of msgs) {
       const dt = new Date(msg.timestamp);
       const timeStr = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
       const dateStr = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
       const isOwnMsg = msg.from === cu.id;
       const isContactReq = msg.type === 'contact_request';
+      const isNewMsg = !isOwnMsg && msg.timestamp > lastSeen;
+      const hasNewReply = (msg.replies || []).some(r => r.from !== cu.id && r.timestamp > lastSeen);
+      const isUnread = isNewMsg || hasNewReply;
       const headerColor = isContactReq ? '#aaa' : (isOwnMsg ? 'var(--gold)' : 'var(--white)');
-      const bgColor = isContactReq ? 'rgba(255,255,255,0.03)' : (isOwnMsg ? 'rgba(245,166,35,0.06)' : 'rgba(255,255,255,0.04)');
-      const borderColor = isContactReq ? 'rgba(255,255,255,0.07)' : (isOwnMsg ? 'rgba(245,166,35,0.2)' : 'rgba(255,255,255,0.08)');
+      const bgColor = isUnread ? 'rgba(229,57,53,0.08)' : isContactReq ? 'rgba(255,255,255,0.03)' : (isOwnMsg ? 'rgba(245,166,35,0.06)' : 'rgba(255,255,255,0.04)');
+      const borderColor = isUnread ? 'rgba(229,57,53,0.4)' : isContactReq ? 'rgba(255,255,255,0.07)' : (isOwnMsg ? 'rgba(245,166,35,0.2)' : 'rgba(255,255,255,0.08)');
+      const newBadge = isUnread ? '<span style="font-size:0.6rem;font-weight:700;background:#e53935;color:#fff;border-radius:8px;padding:1px 6px;margin-left:6px;">NUEVO</span>' : '';
       const dirLabel = !isContactReq && canSuper ? ` <span style="font-size:0.65rem;color:var(--white-muted);">→ ${toLabel(msg.to)}</span>` : '';
       const typeIcon = isContactReq ? '📩' : (msg.fromRol === 'superusuario' || msg.fromRol === 'admin' ? '📢' : '💬');
 
@@ -3097,7 +3146,7 @@
 
       html += `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:10px 12px;margin-bottom:8px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-          <span style="font-size:0.78rem;font-weight:700;color:${headerColor};">${typeIcon} ${msg.fromNombre}${dirLabel}</span>
+          <span style="font-size:0.78rem;font-weight:700;color:${headerColor};">${typeIcon} ${msg.fromNombre}${dirLabel}${newBadge}</span>
           <span style="font-size:0.65rem;color:var(--white-muted);">${dateStr} ${timeStr}</span>
         </div>
         <div style="font-size:0.82rem;color:var(--white);line-height:1.4;">${msg.text}</div>`;
