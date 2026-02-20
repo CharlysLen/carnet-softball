@@ -1150,7 +1150,7 @@
     if (partidos.length === 0) {
       c.innerHTML = `<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4);">
         <p>No hay partidos programados.</p>
-        ${!isUsuario() ? `<button class="btn btn-primary" onclick="Admin.openCreateMatch()" style="margin-top:10px;">+ Crear Primer Partido</button>` : ''}
+        ${(isAdmin() || isSuperuser()) ? `<button class="btn btn-primary" onclick="Admin.openCreateMatch()" style="margin-top:10px;">+ Crear Primer Partido</button>` : ''}
         <button class="btn btn-secondary" onclick="Admin.generateDemoData()" style="margin-top:10px;margin-left:8px;">🎲 Generar Demo</button>
       </div>`;
       return;
@@ -1176,8 +1176,8 @@
 
     let html = '<div class="calendar-list" style="max-width:800px;margin:0 auto;">';
 
-    // Create match button (admin, superusuario, delegado)
-    if (!isUsuario()) {
+    // Create match button (admin, superusuario only)
+    if (isAdmin() || isSuperuser()) {
       html += `<div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
         <button class="btn btn-primary" onclick="Admin.openCreateMatch()" style="font-size:0.85rem;">+ Nuevo Partido</button>
       </div>`;
@@ -1199,13 +1199,19 @@
       const lImg = localTeam ? (localTeam.imagen ? `<img src="${localTeam.imagen}" style="width:20px;height:20px;object-fit:contain;">` : (localTeam.escudo || '🥎')) : '🥎';
       const vImg = visitTeam ? (visitTeam.imagen ? `<img src="${visitTeam.imagen}" style="width:20px;height:20px;object-fit:contain;">` : (visitTeam.escudo || '🥎')) : '🥎';
 
+      const statusBadge = m.status === 'live'
+        ? `<span class="live-badge">● EN VIVO</span>`
+        : m.status === 'finished'
+        ? `<span style="font-size:0.6rem;color:var(--white-muted);background:rgba(255,255,255,0.06);border-radius:10px;padding:2px 7px;">✓ FINALIZADO</span>`
+        : '';
+      const cardBorder = m.status === 'live' ? 'rgba(0,200,100,0.3)' : 'rgba(255,255,255,0.05)';
       html += `
-         <div class="match-card" onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(255,255,255,0.05);cursor:pointer;transition:transform 0.2s, background 0.2s;">
+         <div class="match-card" onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border:1px solid ${cardBorder};cursor:pointer;transition:transform 0.2s, background 0.2s;">
            <div style="text-align:center;min-width:60px;margin-right:15px;">
              <div style="font-size:1.5rem;font-weight:700;line-height:1;">${d.getDate()}</div>
              <div style="font-size:0.6rem;text-transform:uppercase;color:var(--white-muted);">${d.toLocaleDateString('es-ES', { weekday: 'short' })}</div>
            </div>
-           
+
            <div style="flex:1;">
              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
                <div style="display:flex;align-items:center;gap:8px;font-weight:600;">${lImg} ${m.local}</div>
@@ -1216,11 +1222,11 @@
                <div style="font-size:1.2rem;font-weight:700;color:${m.visitScore > m.localScore ? 'var(--gold)' : 'white'};">${m.visitScore}</div>
              </div>
            </div>
-           
+
            <div style="margin-left:20px;text-align:right;font-size:0.7rem;color:var(--white-muted);">
              <div>${m.hora}</div>
              <div>${m.campo}</div>
-             <div style="margin-top:4px;color:var(--gold);font-size:0.6rem;">VER DETALLES →</div>
+             ${statusBadge ? `<div style="margin-top:5px;">${statusBadge}</div>` : `<div style="margin-top:4px;color:var(--gold);font-size:0.6rem;">VER DETALLES →</div>`}
            </div>
          </div>
        `;
@@ -1232,6 +1238,7 @@
 
   // ── CREATE / EDIT MATCH ──
   function openCreateMatch(editId) {
+    if (!editId && isDelegado()) return; // delegados cannot create matches
     const c = document.getElementById('main-content');
     const m = editId ? partidos.find(x => x.id === editId) : null;
     const today = new Date().toISOString().split('T')[0];
@@ -1333,7 +1340,9 @@
         local,
         visitante,
         arbitro,
-        playerStats: {}
+        playerStats: {},
+        status: 'scheduled',
+        log: []
       });
     }
 
@@ -1432,6 +1441,14 @@
       <div class="match-detail-view" style="max-width:900px;margin:0 auto;animation:fadeIn 0.4s ease;">
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-secondary" onclick="Admin.backToCalendar()">← Volver al Calendario</button>
+          ${(isAdmin() || isSuperuser()) ? `
+            ${m.status === 'live'
+              ? `<button class="btn btn-danger" onclick="Admin.endGame('${m.id}')" style="font-weight:700;">🏁 Finalizar Partido</button>`
+              : m.status === 'finished'
+              ? `<span style="font-size:0.8rem;color:var(--white-muted);padding:6px 10px;">✓ Partido finalizado</span>`
+              : `<button class="btn btn-primary" onclick="Admin.startGame('${m.id}')" style="font-weight:700;">▶️ Iniciar Partido</button>`
+            }
+          ` : ''}
           ${canEditTeam(m.local) || canEditTeam(m.visitante) ? `
             <button class="btn btn-secondary" onclick="Admin.openCreateMatch('${m.id}')" title="Editar partido">✏️ Editar</button>
             <button class="btn btn-danger" onclick="Admin.deleteMatch('${m.id}')" title="Eliminar partido" style="font-size:0.75rem;">🗑️</button>
@@ -1471,7 +1488,11 @@
         <!-- Sub-tabs -->
         <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
           ${['resumen', 'local', 'visitante', 'bitacora'].map(tab => {
-            const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: '📝 Bitácora' };
+            const pendingLogs = (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length;
+            const bitacoraLabel = pendingLogs > 0
+              ? `📝 Bitácora <span style="background:var(--gold);color:#000;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${pendingLogs}</span>`
+              : '📝 Bitácora';
+            const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
             const active = lineupSubView === tab;
             return `<button onclick="Admin.setLineupSubView('${tab}')"
               style="padding:10px 16px;font-size:0.8rem;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
@@ -1504,12 +1525,17 @@
           </div>
         ` : `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">📝 Cuaderno de Bitácora</h3>
-            <textarea id="match-log-${m.id}"
-                      style="width:100%;height:120px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:var(--white);font-family:inherit;resize:vertical;"
-                      placeholder="Escribe aquí las incidencias, notas del partido o comentarios..."
-                      onblur="Admin.saveMatchLog('${m.id}', this.value)">${m.bitacora || ''}</textarea>
-            <div style="text-align:right;font-size:0.7rem;color:var(--white-muted);margin-top:5px;">Se guarda automáticamente al hacer clic fuera.</div>
+            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">📋 Registro de Cambios</h3>
+            <div id="match-log-structured">
+              ${renderMatchLog(m)}
+            </div>
+            <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;">
+              <div style="font-size:0.75rem;color:var(--white-muted);margin-bottom:6px;">Notas libres del partido</div>
+              <textarea id="match-log-${m.id}"
+                        style="width:100%;height:80px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:var(--white);font-family:inherit;resize:vertical;"
+                        placeholder="Incidencias, árbitro, condiciones del campo..."
+                        onblur="Admin.saveMatchLog('${m.id}', this.value)">${m.bitacora || ''}</textarea>
+            </div>
           </div>
         `}
         </div>
@@ -1935,6 +1961,13 @@
     } else if (field === 'direction') {
       turn.direction = value;
     }
+    const _lp = players.find(x => x.id === playerId);
+    const _ln = _lp ? _lp.nombre.split(' ')[0] : playerId;
+    if (field === 'result' && turn.result) {
+      logChange(matchId, 'turn_result', `${_ln} (${teamName.split(' ')[0]}): turno ${turnIdx + 1} → ${turn.result}`);
+    } else if (field === 'sb' || field === 'run') {
+      logChange(matchId, 'turn_result', `${_ln}: turno ${turnIdx + 1} ${field === 'sb' ? 'SB' : 'anotó'} → ${turn[field] ? 'sí' : 'no'}`);
+    }
     syncLineupToPlayerStats(m);
     autoSave();
     // Update only the editor, not the full page
@@ -1950,6 +1983,9 @@
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     entry.defense[field] = parseInt(value, 10) || 0;
+    const _dp = players.find(x => x.id === playerId);
+    const _dn = _dp ? _dp.nombre.split(' ')[0] : playerId;
+    logChange(matchId, 'defense_change', `${_dn}: defensa ${field} → ${value}`);
     autoSave();
   }
 
@@ -2201,6 +2237,9 @@
     const order = { titular: 'lesionado', lesionado: 'suplente', suplente: 'ausente', ausente: 'titular' };
     entry.status = order[cur] || 'suplente';
     delete entry.starter; // migrate away from old field
+    const _sp = players.find(x => x.id === playerId);
+    const _sn = _sp ? _sp.nombre.split(' ')[0] : playerId;
+    logChange(matchId, 'status_change', `${_sn}: ${cur} → ${entry.status}`);
     autoSave();
     renderView();
   }
@@ -2213,6 +2252,9 @@
     const n = parseInt(newOrder, 10);
     if (isNaN(n) || n < 1) return;
     entry.order = n;
+    const _op = players.find(x => x.id === playerId);
+    const _on = _op ? _op.nombre.split(' ')[0] : playerId;
+    logChange(matchId, 'order_change', `${_on}: turno de bateo → ${n}`);
     autoSave();
     renderView();
   }
@@ -2229,6 +2271,11 @@
     subEntry.status = 'titular';
     subEntry.order = inheritedOrder;
     subEntry.replacesPlayer = outPlayerId;
+    const _outP = players.find(x => x.id === outPlayerId);
+    const _subP = players.find(x => x.id === subPlayerId);
+    const _outN = _outP ? _outP.nombre.split(' ')[0] : outPlayerId;
+    const _subN = _subP ? _subP.nombre.split(' ')[0] : subPlayerId;
+    logChange(matchId, 'substitution', `Sustitución (${teamName.split(' ')[0]}): sale ${_outN} #${inheritedOrder}, entra ${_subN}`);
     autoSave();
     renderView();
   }
@@ -2738,10 +2785,14 @@
     const occupant = m.lineup[teamName].find(e =>
       e.playerId !== playerId && e.position === positionName && getStatus(e) === 'titular'
     );
+    const _oldPos = draggedEntry.position;
     if (occupant) occupant.position = draggedEntry.position;
     draggedEntry.position = positionName;
     const st = getStatus(draggedEntry);
     if (st === 'suplente' || st === 'ausente') draggedEntry.status = 'titular';
+    const _pp = players.find(x => x.id === playerId);
+    const _pn = _pp ? _pp.nombre.split(' ')[0] : playerId;
+    logChange(matchId, 'position_change', `${_pn}: ${_oldPos || '?'} → ${positionName}`);
     autoSave();
     renderView();
   }
@@ -2832,6 +2883,125 @@
     clearFieldDrag();
   }
 
+  // ── GAME LOG ──
+  function logChange(matchId, type, description) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    if (!m.log) m.log = [];
+    const cu = getCurrentUser();
+    m.log.push({
+      id: 'log-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+      timestamp: Date.now(),
+      type,
+      actorId: cu.id,
+      actorNombre: cu.nombre || cu.id,
+      actorRol: cu.rol,
+      description,
+      acknowledged: (cu.rol === 'admin' || cu.rol === 'superusuario') // auto-ack if admin/super made the change
+    });
+  }
+
+  function startGame(matchId) {
+    if (!isAdmin() && !isSuperuser()) return;
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    m.status = 'live';
+    m.startedAt = Date.now();
+    logChange(matchId, 'game_start', 'Partido iniciado');
+    autoSave();
+    renderView();
+  }
+
+  function endGame(matchId) {
+    if (!isAdmin() && !isSuperuser()) return;
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    if (!confirm('¿Finalizar el partido? Esta acción declarará el partido como terminado.')) return;
+    m.status = 'finished';
+    m.endedAt = Date.now();
+    logChange(matchId, 'game_end', 'Partido finalizado');
+    autoSave();
+    renderView();
+  }
+
+  function acknowledgeLog(matchId, logId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.log) return;
+    const entry = m.log.find(x => x.id === logId);
+    if (entry) {
+      entry.acknowledged = true;
+      entry.acknowledgedBy = getCurrentUser().id;
+      entry.acknowledgedAt = Date.now();
+    }
+    autoSave();
+    const box = document.getElementById('match-log-structured');
+    if (box) box.innerHTML = renderMatchLog(m);
+    // Refresh tab badge without full re-render
+    const tabContainer = document.querySelector('[onclick*="setLineupSubView(\'bitacora\')"]');
+    if (tabContainer) {
+      const pending = (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length;
+      tabContainer.innerHTML = pending > 0
+        ? `📝 Bitácora <span style="background:var(--gold);color:#000;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${pending}</span>`
+        : '📝 Bitácora';
+    }
+  }
+
+  function acknowledgeAllLogs(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.log) return;
+    const cu = getCurrentUser();
+    m.log.forEach(e => {
+      if (!e.acknowledged) {
+        e.acknowledged = true;
+        e.acknowledgedBy = cu.id;
+        e.acknowledgedAt = Date.now();
+      }
+    });
+    autoSave();
+    const box = document.getElementById('match-log-structured');
+    if (box) box.innerHTML = renderMatchLog(m);
+    const tabContainer = document.querySelector('[onclick*="setLineupSubView(\'bitacora\')"]');
+    if (tabContainer) tabContainer.innerHTML = '📝 Bitácora';
+  }
+
+  function renderMatchLog(m) {
+    if (!m.log || m.log.length === 0) {
+      return '<div style="color:var(--white-muted);font-size:0.8rem;padding:20px 0;text-align:center;">No hay cambios registrados aún.</div>';
+    }
+    const canAck = isAdmin() || isSuperuser();
+    const sorted = [...m.log].reverse();
+    const pending = sorted.filter(e => !e.acknowledged && e.actorRol === 'delegado').length;
+    const LOG_ICONS = {
+      game_start: '▶️', game_end: '🏁',
+      turn_result: '⚾', defense_change: '🧤',
+      status_change: '🔄', order_change: '🔢',
+      substitution: '↕️', position_change: '📍'
+    };
+    let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:0.75rem;color:var(--white-muted);">${m.log.length} cambio${m.log.length !== 1 ? 's' : ''}${pending > 0 ? ` · <span style="color:var(--gold);font-weight:700;">${pending} pendiente${pending !== 1 ? 's' : ''}</span>` : ''}</div>
+      ${canAck && pending > 0 ? `<button class="btn btn-sm btn-secondary" onclick="Admin.acknowledgeAllLogs('${m.id}')" style="font-size:0.7rem;padding:4px 10px;">✓ Reconocer todo</button>` : ''}
+    </div><div style="display:flex;flex-direction:column;gap:5px;max-height:320px;overflow-y:auto;">`;
+    for (const e of sorted) {
+      const dt = new Date(e.timestamp);
+      const timeStr = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const dateStr = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+      const icon = LOG_ICONS[e.type] || '📝';
+      const isDelegate = e.actorRol === 'delegado';
+      const needsAck = !e.acknowledged && isDelegate;
+      html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-radius:8px;background:${needsAck ? 'rgba(245,166,35,0.08)' : 'rgba(255,255,255,0.03)'};border:1px solid ${needsAck ? 'rgba(245,166,35,0.25)' : 'transparent'};">
+        <span style="font-size:0.9rem;flex-shrink:0;margin-top:1px;">${icon}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:0.82rem;color:var(--white);">${e.description}</div>
+          <div style="font-size:0.68rem;color:var(--white-muted);margin-top:2px;">${e.actorNombre} · ${dateStr} ${timeStr}</div>
+        </div>
+        ${needsAck && canAck ? `<button onclick="Admin.acknowledgeLog('${m.id}','${e.id}')" style="flex-shrink:0;background:rgba(245,166,35,0.15);border:1px solid var(--gold);color:var(--gold);border-radius:6px;padding:3px 8px;font-size:0.7rem;cursor:pointer;white-space:nowrap;">✓ OK</button>` : ''}
+        ${e.acknowledged ? `<span style="flex-shrink:0;color:var(--green);font-size:0.75rem;opacity:0.7;margin-top:2px;">✓</span>` : ''}
+      </div>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
   window.Admin = {
     init,
     renderView,
@@ -2898,6 +3068,12 @@
     openCreateMatch,
     saveNewMatch,
     deleteMatch,
+    startGame,
+    endGame,
+
+    // Game log
+    acknowledgeLog,
+    acknowledgeAllLogs,
 
     // Lineup / Scorecard
     setLineupSubView,
