@@ -3290,9 +3290,33 @@
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
     if (!confirm('¿Finalizar el partido? Esta acción declarará el partido como terminado.')) return;
+
+    // Build final summary before changing status (logChange guard requires 'live')
+    const totalChanges = (m.log || []).length;
+    let localScore = 0, visitScore = 0;
+    if (m.playerStats) {
+      Object.entries(m.playerStats).forEach(([pid, s]) => {
+        const p = players.find(x => x.id === pid);
+        if (p) {
+          if (p.equipo === m.local) localScore += (s.r || 0);
+          if (p.equipo === m.visitante) visitScore += (s.r || 0);
+        }
+      });
+    }
+    const duration = m.startedAt ? Math.round((Date.now() - m.startedAt) / 60000) : null;
+    const durationStr = duration ? ` · Duración: ${duration} min` : '';
+    const summary = `Partido finalizado — ${m.local} ${localScore} : ${visitScore} ${m.visitante}${durationStr} · ${totalChanges} cambios registrados`;
+
+    // Log while still 'live' so the guard passes
+    logChange(matchId, 'game_end', summary);
+
+    // Append summary to free-text bitácora as permanent record
+    const ts = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+    const prev = (m.bitacora || '').trim();
+    m.bitacora = (prev ? prev + '\n' : '') + `[${ts}] ${summary}`;
+
     m.status = 'finished';
     m.endedAt = Date.now();
-    logChange(matchId, 'game_end', 'Partido finalizado');
     autoSave();
     renderView();
   }
