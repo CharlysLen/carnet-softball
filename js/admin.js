@@ -64,8 +64,12 @@
   // Admin & Superusuario can manage teams (create/edit/delete)
   function canManageTeams() { return isAdmin() || isSuperuser(); }
 
+  let _suppressSync = false; // prevents echo when current user just saved
+
   function autoSave() {
+    _suppressSync = true;
     AppStore.save({ equipos, jugadores: players, partidos, usuarios });
+    setTimeout(() => { _suppressSync = false; }, 3000);
   }
 
   async function loadData() {
@@ -78,6 +82,54 @@
     renderView();
     // Migrate photos with black areas from EXIF bug (runs once, auto-detects)
     migratePhotos().then(() => renderView());
+    // Start real-time sync after initial load
+    setupRealtimeSync();
+  }
+
+  function setupRealtimeSync() {
+    if (typeof firebaseDB === 'undefined') return;
+    firebaseDB.ref('softball40').on('value', (snap) => {
+      if (_suppressSync) return; // ignore echo from own save
+      const val = snap.val();
+      if (!val || !val.jugadores) return;
+
+      // Update local state from Firebase
+      if (val.equipos)   equipos  = val.equipos;
+      if (val.jugadores) players  = val.jugadores;
+      if (val.partidos)  partidos = val.partidos;
+      if (val.usuarios)  usuarios = val.usuarios;
+
+      // Update localStorage cache
+      try { localStorage.setItem('softball40_data', JSON.stringify({ equipos, jugadores: players, partidos, usuarios })); } catch(e) {}
+
+      // Re-render — but skip if user is actively typing in an input/textarea
+      const ae = document.activeElement;
+      const isTyping = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+      if (!isTyping) {
+        renderView();
+        _showSyncToast();
+      } else {
+        _showUpdateBanner();
+      }
+    });
+  }
+
+  function _showSyncToast() {
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,200,100,0.9);color:#000;padding:7px 18px;border-radius:20px;font-size:0.78rem;font-weight:700;z-index:9999;pointer-events:none;box-shadow:0 3px 10px rgba(0,0,0,0.3);';
+    t.textContent = '🔄 Datos actualizados';
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2200);
+  }
+
+  function _showUpdateBanner() {
+    if (document.getElementById('rt-update-banner')) return;
+    const b = document.createElement('div');
+    b.id = 'rt-update-banner';
+    b.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--gold);color:#000;padding:9px 20px;border-radius:20px;font-size:0.8rem;font-weight:700;cursor:pointer;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,0.35);';
+    b.innerHTML = '🔄 Hay cambios pendientes — <u>pulsa para actualizar</u>';
+    b.onclick = () => { b.remove(); renderView(); };
+    document.body.appendChild(b);
   }
 
   function getTeamPlayers(n) {
