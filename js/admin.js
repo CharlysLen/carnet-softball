@@ -3039,7 +3039,12 @@
 
     // ── Super compose panel ──
     if (canSuper) {
-      const delegList = usuarios.filter(u => u.rol === 'delegado' || u.rol === 'usuario');
+      // Only show users/delegados from the two teams playing this match
+      const matchTeams = [m.local, m.visitante].map(t => (t || '').toLowerCase());
+      const delegList = usuarios.filter(u =>
+        (u.rol === 'delegado' || u.rol === 'usuario') &&
+        matchTeams.some(t => t && (u.equipo || '').toLowerCase() === t)
+      );
       const recipientOptions = [
         '<option value="all">Todos los usuarios</option>',
         '<option value="all_delegados">Todos los delegados</option>',
