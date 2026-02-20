@@ -1991,16 +1991,21 @@
 
     const st = entry.status || (entry.starter === false ? 'suplente' : entry.starter === 'ausente' ? 'ausente' : 'titular');
     const STATUS_STYLES = {
-      titular: { bg: 'rgba(0,230,118,0.15)', color: 'var(--green)', label: 'Titular', icon: '⚾', next: 'suplente', nextLabel: 'Suplente' },
-      suplente: { bg: 'rgba(255,255,255,0.08)', color: 'var(--white-muted)', label: 'Suplente', icon: '📋', next: 'ausente', nextLabel: 'Ausente' },
-      ausente: { bg: 'rgba(244,67,54,0.15)', color: 'var(--red)', label: 'Ausente', icon: '❌', next: 'titular', nextLabel: 'Titular' }
+      titular:   { bg: 'rgba(0,230,118,0.15)',  color: 'var(--green)',      label: 'Titular',   icon: '⚾',  next: 'lesionado', nextLabel: 'Lesionado' },
+      lesionado: { bg: 'rgba(255,152,0,0.15)',   color: '#ff9800',           label: 'Lesionado', icon: '🚑',  next: 'suplente',  nextLabel: 'Suplente' },
+      suplente:  { bg: 'rgba(255,255,255,0.08)', color: 'var(--white-muted)',label: 'Suplente',  icon: '📋', next: 'ausente',   nextLabel: 'Ausente' },
+      ausente:   { bg: 'rgba(244,67,54,0.15)',   color: 'var(--red)',        label: 'Ausente',   icon: '❌',  next: 'titular',   nextLabel: 'Titular' }
     };
     const stStyle = STATUS_STYLES[st] || STATUS_STYLES.suplente;
     const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Infielder','Outfielder','BA','BD'];
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <span style="color:var(--gold);font-weight:700;font-size:1.1rem;">#${entry.order}</span>
+          <label style="display:flex;align-items:center;gap:3px;color:var(--gold);font-weight:700;font-size:0.8rem;">
+            BAT<input type="number" min="1" max="30" value="${entry.order}"
+              onchange="Admin.setPlayerOrder('${mid}','${tn}','${pid}',this.value)"
+              style="width:38px;padding:2px 4px;font-size:0.85rem;font-weight:700;color:var(--gold);background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.4);border-radius:4px;text-align:center;">
+          </label>
           <span style="font-weight:700;font-size:1rem;">${p.nombre}</span>
           <select onchange="Admin.setLineupPosition('${mid}','${tn}','${pid}',this.value)"
             style="padding:3px 6px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--gold);border:1px solid rgba(245,166,35,0.3);border-radius:6px;font-weight:600;">
@@ -2066,6 +2071,43 @@
           style="width:44px;padding:3px;font-size:0.75rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;text-align:center;"></label>
       </div>
     </div>`;
+
+    // Extra panels depending on status
+    const lineup2 = match.lineup[teamName];
+    if (st === 'suplente') {
+      // "Entra por" panel — list titulares and lesionados available for substitution
+      const getStatus2 = e => e.status || (e.starter === false ? 'suplente' : 'titular');
+      const candidates = lineup2.filter(e => e.playerId !== playerId && ['titular','lesionado'].includes(getStatus2(e)) && !e.replacedBy);
+      if (candidates.length > 0) {
+        const selId = 'sub-out-' + playerId;
+        h += `<div style="margin-top:10px;padding:10px 12px;background:rgba(255,152,0,0.06);border-radius:10px;border:1px solid rgba(255,152,0,0.2);">
+          <div style="font-size:0.7rem;color:#ff9800;font-weight:700;margin-bottom:8px;">🔄 CAMBIO — Entra por:</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="${selId}" style="flex:1;padding:5px 8px;font-size:0.8rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,152,0,0.3);border-radius:6px;">
+              ${candidates.map(e => { const cp = players.find(x => x.id === e.playerId); return cp ? `<option value="${e.playerId}">#${e.order} ${cp.nombre} (${shortenPosition(e.position)})</option>` : ''; }).join('')}
+            </select>
+            <button class="btn btn-sm" onclick="Admin.makeSubstitution('${mid}','${tn}','${pid}',document.getElementById('${selId}').value)"
+              style="background:#ff9800;color:#000;font-weight:700;white-space:nowrap;">Confirmar</button>
+          </div>
+        </div>`;
+      }
+    }
+    if (st === 'lesionado' && entry.replacedBy) {
+      const subP = players.find(x => x.id === entry.replacedBy);
+      if (subP) {
+        h += `<div style="margin-top:8px;padding:6px 10px;background:rgba(255,152,0,0.06);border-radius:8px;border:1px solid rgba(255,152,0,0.15);font-size:0.75rem;color:#ff9800;">
+          🔄 Reemplazado por: <strong>${subP.nombre}</strong>
+        </div>`;
+      }
+    }
+    if (st === 'titular' && entry.replacesPlayer) {
+      const outP = players.find(x => x.id === entry.replacesPlayer);
+      if (outP) {
+        h += `<div style="margin-top:8px;padding:6px 10px;background:rgba(0,230,118,0.06);border-radius:8px;border:1px solid rgba(0,230,118,0.15);font-size:0.75rem;color:var(--green);">
+          ↑ Entró por: <strong>${outP.nombre}</strong>
+        </div>`;
+      }
+    }
 
     h += '</div>';
     return h;
@@ -2156,9 +2198,37 @@
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     const cur = entry.status || (entry.starter === false ? 'suplente' : 'titular');
-    const order = { titular: 'suplente', suplente: 'ausente', ausente: 'titular' };
+    const order = { titular: 'lesionado', lesionado: 'suplente', suplente: 'ausente', ausente: 'titular' };
     entry.status = order[cur] || 'suplente';
     delete entry.starter; // migrate away from old field
+    autoSave();
+    renderView();
+  }
+
+  function setPlayerOrder(matchId, teamName, playerId, newOrder) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const entry = m.lineup[teamName].find(e => e.playerId === playerId);
+    if (!entry) return;
+    const n = parseInt(newOrder, 10);
+    if (isNaN(n) || n < 1) return;
+    entry.order = n;
+    autoSave();
+    renderView();
+  }
+
+  function makeSubstitution(matchId, teamName, subPlayerId, outPlayerId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const outEntry = m.lineup[teamName].find(e => e.playerId === outPlayerId);
+    const subEntry = m.lineup[teamName].find(e => e.playerId === subPlayerId);
+    if (!outEntry || !subEntry) return;
+    const inheritedOrder = outEntry.order;
+    outEntry.status = 'lesionado';
+    outEntry.replacedBy = subPlayerId;
+    subEntry.status = 'titular';
+    subEntry.order = inheritedOrder;
+    subEntry.replacesPlayer = outPlayerId;
     autoSave();
     renderView();
   }
@@ -2169,8 +2239,9 @@
 
     // Helper to resolve status (backward compat with old starter boolean)
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
-    const starters = lineup.filter(e => getStatus(e) === 'titular');
+    const starters = lineup.filter(e => ['titular','lesionado'].includes(getStatus(e)));
     const subs = lineup.filter(e => getStatus(e) === 'suplente');
+    const lesionados = lineup.filter(e => getStatus(e) === 'lesionado');
     const ausentes = lineup.filter(e => getStatus(e) === 'ausente');
     const canEdit = canEditTeam(teamName);
     const mid = match.id;
@@ -2303,6 +2374,76 @@
     return html;
   }
 
+  function renderBattingOrderCard(match, teamName) {
+    const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
+    if (lineup.length === 0) return '';
+    const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
+    // Build slots: keyed by the "base" order (lesionado's order = canonical slot)
+    // Collect all titulares and lesionados, skip pure suplentes/ausentes
+    const active = lineup.filter(e => ['titular','lesionado'].includes(getStatus(e)));
+    if (active.length === 0) return '';
+
+    // Group by slot: for a sub (replacesPlayer set), slot = their order (which was inherited)
+    // For a lesionado, slot = their order
+    // Sort by order
+    const sorted = [...active].sort((a, b) => a.order - b.order);
+
+    let rows = '';
+    const seenOrders = new Set();
+    for (const entry of sorted) {
+      const st = getStatus(entry);
+      const p = players.find(x => x.id === entry.playerId);
+      if (!p) continue;
+      const isSelected = selectedLineupPlayerId === entry.playerId;
+      if (st === 'lesionado') {
+        const subEntry = entry.replacedBy ? lineup.find(e => e.playerId === entry.replacedBy) : null;
+        const subP = subEntry ? players.find(x => x.id === subEntry.playerId) : null;
+        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;opacity:0.5;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
+          <td style="padding:4px 8px;color:#ff9800;font-weight:700;text-decoration:line-through;">${entry.order}</td>
+          <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
+          <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
+          <td style="padding:4px 8px;font-size:0.8rem;text-decoration:line-through;">${p.nombre} <span style="font-size:0.6rem;color:#ff9800;font-weight:700;">LES</span></td>
+          <td style="padding:4px 8px;font-size:0.7rem;color:#ff9800;">${subP ? '→ ' + subP.nombre : ''}</td>
+        </tr>`;
+        if (subP && subEntry) {
+          const isSubSel = selectedLineupPlayerId === subEntry.playerId;
+          rows += `<tr onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:pointer;${isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
+            <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${subEntry.order}</td>
+            <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${subP.dorsal || '-'}</td>
+            <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(subEntry.position)}</td>
+            <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSubSel ? 'color:var(--gold);' : ''}">${subP.nombre}</td>
+            <td></td>
+          </tr>`;
+          seenOrders.add(subEntry.playerId);
+        }
+        seenOrders.add(entry.playerId);
+      } else if (!seenOrders.has(entry.playerId)) {
+        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
+          <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${entry.order}</td>
+          <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
+          <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
+          <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${entry.replacesPlayer ? ' <span style="font-size:0.6rem;color:var(--green);">↑</span>' : ''}</td>
+          <td></td>
+        </tr>`;
+        seenOrders.add(entry.playerId);
+      }
+    }
+
+    return `<div style="margin:0 auto 12px;max-width:500px;">
+      <div style="font-size:0.7rem;color:var(--gold);font-weight:700;letter-spacing:1px;margin-bottom:6px;">ORDEN DE BATEO</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.78rem;">
+        <thead><tr style="background:rgba(255,255,255,0.04);font-size:0.65rem;color:var(--white-muted);">
+          <th style="padding:4px 8px;text-align:left;">BAT</th>
+          <th style="padding:4px;text-align:center;">No</th>
+          <th style="padding:4px;text-align:center;">Pos</th>
+          <th style="padding:4px 8px;text-align:left;">Jugador</th>
+          <th style="padding:4px;"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
   function renderLineupEditor(match, teamName) {
     const canEdit = canEditTeam(teamName);
     const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
@@ -2323,6 +2464,9 @@
 
     // Field map
     let html = renderFieldMap(match, teamName);
+
+    // Batting order card
+    html += renderBattingOrderCard(match, teamName);
 
     // Summary table — clickable rows
     html += `<div style="overflow-x:auto;margin-bottom:16px;">
@@ -2349,9 +2493,10 @@
       Object.keys(totals).forEach(k => totals[k] += s[k]);
       const isSelected = selectedLineupPlayerId === entry.playerId;
       const pStatus = entry.status || (entry.starter === false ? 'suplente' : 'titular');
-      const statusTag = pStatus === 'suplente' ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>'
-        : pStatus === 'ausente' ? ' <span style="font-size:0.6rem;color:var(--red);font-weight:400;">(AUS)</span>' : '';
-      const rowOpacity = pStatus === 'ausente' ? 'opacity:0.35;' : pStatus === 'suplente' ? 'opacity:0.5;' : '';
+      const statusTag = pStatus === 'suplente'   ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>'
+        : pStatus === 'ausente'   ? ' <span style="font-size:0.6rem;color:var(--red);font-weight:400;">(AUS)</span>'
+        : pStatus === 'lesionado' ? ' <span style="font-size:0.6rem;color:#ff9800;font-weight:700;">🚑</span>' : '';
+      const rowOpacity = pStatus === 'ausente' ? 'opacity:0.35;' : pStatus === 'suplente' ? 'opacity:0.5;' : pStatus === 'lesionado' ? 'opacity:0.6;' : '';
       html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${rowOpacity}"
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
         <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${entry.order}</td>
@@ -2607,6 +2752,8 @@
     movePlayerInLineup,
     selectLineupPlayer,
     cycleStatus,
+    setPlayerOrder,
+    makeSubstitution,
     setLineupPosition,
     renderLineupList,
 
