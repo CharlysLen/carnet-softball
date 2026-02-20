@@ -16,8 +16,17 @@ const AppStore = (function () {
     }
 
     // --- Firebase helpers ---
+    function fbAuthed() {
+        return typeof firebase !== 'undefined' &&
+               firebase.auth().currentUser !== null;
+    }
+
     function fbSave(data) {
         if (!fbAvailable()) return Promise.resolve();
+        if (!fbAuthed()) {
+            console.warn('[Firebase] Write skipped — not authenticated');
+            return Promise.resolve();
+        }
         return firebaseDB.ref(FB_PATH).set(data)
             .then(() => console.log('[Firebase] Saved'))
             .catch(e => console.error('[Firebase] Save failed:', e));
@@ -93,7 +102,7 @@ const AppStore = (function () {
 
     function reset() {
         localStorage.removeItem(STORAGE_KEY);
-        if (fbAvailable()) {
+        if (fbAvailable() && fbAuthed()) {
             firebaseDB.ref(FB_PATH).remove()
                 .then(() => console.log('[Firebase] Data removed'))
                 .catch(e => console.error('[Firebase] Remove failed:', e));

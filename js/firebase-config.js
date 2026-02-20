@@ -15,4 +15,12 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const firebaseDB = firebase.database();
+const firebaseAuth = firebase.auth();
+
+// Shared Firebase Auth account used to authorize writes.
+// Fill in the email and password you created in Firebase Console
+// (Authentication → Users → Add user).
+const FB_AUTH_EMAIL    = 'admin@softball.app';
+const FB_AUTH_PASSWORD = 'Caracas26?';
+
 console.log('[Firebase] Initialized');

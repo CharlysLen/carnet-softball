@@ -1594,6 +1594,9 @@
 
   function logout() {
     sessionStorage.clear();
+    if (typeof firebaseAuth !== 'undefined') {
+      firebaseAuth.signOut().catch(() => {});
+    }
     location.reload();
   }
 

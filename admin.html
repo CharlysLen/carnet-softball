@@ -349,6 +349,7 @@
 
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="js/firebase-config.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/admin.js"></script>
@@ -384,6 +385,14 @@
                 if (typeof Admin !== 'undefined') {
                     if (Admin.applyPermissions) Admin.applyPermissions();
                     if (Admin.renderView) Admin.renderView();
+                }
+                // Sign in to Firebase Auth so writes are authorized
+                if (typeof firebaseAuth !== 'undefined' &&
+                    typeof FB_AUTH_EMAIL !== 'undefined' &&
+                    FB_AUTH_PASSWORD !== 'CHANGE_ME') {
+                    firebaseAuth.signInWithEmailAndPassword(FB_AUTH_EMAIL, FB_AUTH_PASSWORD)
+                        .then(() => console.log('[Firebase Auth] Signed in'))
+                        .catch(e => console.warn('[Firebase Auth] Sign in failed:', e.message));
                 }
             } else {
                 loginError.style.display = 'block';
