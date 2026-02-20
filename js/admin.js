@@ -2299,12 +2299,14 @@
            ondrop="Admin.onFieldDrop(event,'${entry.position}')"
            ontouchstart="Admin.touchDragStart(event,'${mid}','${tn}','${entry.playerId}')"` : '';
 
-      spots += `<div class="field-spot" style="left:${pos.x}%;top:${pos.y}%;position:relative;" ${dragAttrs}
+      spots += `<div class="field-spot" style="left:${pos.x}%;top:${pos.y}%;" ${dragAttrs}
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
-        <div class="field-avatar" style="border-color:${selectedLineupPlayerId === entry.playerId ? 'var(--gold)' : 'rgba(255,255,255,0.4)'};">
-          ${photo}
+        <div style="position:relative;display:inline-block;">
+          <div class="field-avatar" style="border-color:${selectedLineupPlayerId === entry.playerId ? 'var(--gold)' : 'rgba(255,255,255,0.4)'};">
+            ${photo}
+          </div>
+          ${lesIcon}
         </div>
-        ${lesIcon}
         <div class="field-name">${p.nombre.split(' ')[0]}</div>
         <div class="field-pos">${shortenPosition(entry.position)}</div>
         ${statLine ? `<div class="field-stat">${statLine}</div>` : ''}
