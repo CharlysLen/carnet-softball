@@ -2119,8 +2119,10 @@
     'Left Field':   { x: 15, y: 22 },
     'Center Field': { x: 50, y: 10 },
     'Right Field':  { x: 85, y: 22 },
-    'Shortfield':   { x: 50, y: 30 }
-    // BA, BD, Infielder, Outfielder are not fielded — shown in bench area
+    'Shortfield':   { x: 50, y: 30 },
+    'BA':           { x: 42, y: 74 },
+    'BD':           { x: 58, y: 74 }
+    // Infielder, Outfielder are not fielded — shown in bench area
   };
 
   // Position number mapping (softball standard)
@@ -2175,8 +2177,8 @@
     const tn = teamName.replace(/'/g, "\\'");
 
     // Positions not shown on field (no defense) — go to bench section
-    const NO_FIELD_POSITIONS = new Set(['BA', 'BD', 'Infielder', 'Outfielder']);
-    // Separate field starters from BA/BD starters
+    const NO_FIELD_POSITIONS = new Set(['Infielder', 'Outfielder']);
+    // Separate field starters from bench-only starters
     const fieldStarters = starters.filter(e => !NO_FIELD_POSITIONS.has(e.position));
     const benchStarters = starters.filter(e => NO_FIELD_POSITIONS.has(e.position));
 
@@ -2229,10 +2231,10 @@
       ${spots}
     </div>`;
 
-    // BA / BD titulares (no van al campo defensivamente)
+    // Infielder / Outfielder titulares (posiciones sin spot fijo en el campo)
     if (benchStarters.length > 0) {
       html += `<div style="margin:0 auto 8px;max-width:500px;background:rgba(245,166,35,0.04);border-radius:10px;padding:8px 12px;border:1px solid rgba(245,166,35,0.12);">
-        <div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px;font-weight:600;letter-spacing:1px;">BATEADORES (${benchStarters.length})</div>
+        <div style="font-size:0.7rem;color:var(--gold);margin-bottom:6px;font-weight:600;letter-spacing:1px;">CAMPO (${benchStarters.length})</div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;">`;
       for (const entry of benchStarters) {
         const p = players.find(x => x.id === entry.playerId);
