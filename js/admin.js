@@ -46,7 +46,9 @@
     if (isAdmin() || isSuperuser()) return true;
     if (!isDelegado()) return false;
     const dt = getDelegadoTeam();
-    return dt && (dt.nombre === teamName || dt.id === teamName);
+    if (!dt) return false;
+    const tn = (teamName || '').toLowerCase();
+    return dt.nombre.toLowerCase() === tn || dt.id.toLowerCase() === tn;
   }
   // Only Admin & Superusuario can toggle estado/verificado
   function canToggleStatus() { return isAdmin() || isSuperuser(); }
@@ -1530,11 +1532,13 @@
               ${renderMatchLog(m)}
             </div>
             <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;">
-              <div style="font-size:0.75rem;color:var(--white-muted);margin-bottom:6px;">Notas libres del partido</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <div style="font-size:0.75rem;color:var(--white-muted);">Notas libres del partido</div>
+                <button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>
+              </div>
               <textarea id="match-log-${m.id}"
                         style="width:100%;height:80px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:var(--white);font-family:inherit;resize:vertical;"
-                        placeholder="Incidencias, árbitro, condiciones del campo..."
-                        onblur="Admin.saveMatchLog('${m.id}', this.value)">${m.bitacora || ''}</textarea>
+                        placeholder="Incidencias, árbitro, condiciones del campo...">${m.bitacora || ''}</textarea>
             </div>
           </div>
         `}
@@ -2745,10 +2749,18 @@
   // ── EXPOSE TO WINDOW ──
   function saveMatchLog(id, text) {
     const match = partidos.find(p => p.id === id);
-    if (match) {
-      match.bitacora = text;
-      autoSave();
+    if (!match) return;
+    const prev = (match.bitacora || '').trim();
+    const next = text.trim();
+    match.bitacora = text;
+    // Only log if text actually changed and is non-empty
+    if (next && next !== prev) {
+      logChange(id, 'note', next);
     }
+    autoSave();
+    // Refresh the structured log panel if it's visible
+    const box = document.getElementById('match-log-structured');
+    if (box) box.innerHTML = renderMatchLog(match);
   }
 
   // ── FIELD DRAG & DROP (mouse + touch) ──
@@ -2975,7 +2987,8 @@
       game_start: '▶️', game_end: '🏁',
       turn_result: '⚾', defense_change: '🧤',
       status_change: '🔄', order_change: '🔢',
-      substitution: '↕️', position_change: '📍'
+      substitution: '↕️', position_change: '📍',
+      note: '📝'
     };
     let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <div style="font-size:0.75rem;color:var(--white-muted);">${m.log.length} cambio${m.log.length !== 1 ? 's' : ''}${pending > 0 ? ` · <span style="color:var(--gold);font-weight:700;">${pending} pendiente${pending !== 1 ? 's' : ''}</span>` : ''}</div>
