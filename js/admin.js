@@ -41,6 +41,15 @@
     return equipos.find(e => e.nombre === u.equipo || e.id === u.equipo ||
       e.nombre.toLowerCase() === u.equipo.toLowerCase() || e.id.toLowerCase() === u.equipo.toLowerCase());
   }
+  // Returns true if current user can make edits to a live/scheduled match.
+  // Delegados: only while match is live. Admin/super: always.
+  function canEditMatch(match) {
+    if (!match) return false;
+    if (isAdmin() || isSuperuser()) return true;
+    if (isDelegado()) return match.status === 'live';
+    return false;
+  }
+
   function canEditTeam(teamName) {
     if (isUsuario()) return false;
     if (isAdmin() || isSuperuser()) return true;
@@ -1344,7 +1353,8 @@
         arbitro,
         playerStats: {},
         status: 'scheduled',
-        log: []
+        log: [],
+        mensajes: []
       });
     }
 
@@ -1527,19 +1537,36 @@
           </div>
         ` : `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">📋 Registro de Cambios</h3>
+
+            <!-- Registro de Cambios -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <h3 style="color:var(--gold);font-family:var(--font-display);margin:0;text-transform:uppercase;letter-spacing:1px;font-size:0.85rem;">📋 Registro de Cambios</h3>
+              ${m.status !== 'live' ? `<span style="font-size:0.65rem;padding:2px 8px;border-radius:10px;background:${m.status === 'finished' ? 'rgba(244,67,54,0.15)' : 'rgba(255,255,255,0.07)'};color:${m.status === 'finished' ? 'var(--red)' : 'var(--white-muted)'};">${m.status === 'finished' ? '🔒 Finalizado' : '⏳ No iniciado'}</span>` : '<span class="live-badge">● EN VIVO</span>'}
+            </div>
             <div id="match-log-structured">
               ${renderMatchLog(m)}
             </div>
-            <div style="margin-top:18px;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;">
+
+            ${(isAdmin() || isSuperuser() || (isDelegado() && m.status === 'live')) ? `
+            <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <div style="font-size:0.75rem;color:var(--white-muted);">Notas libres del partido</div>
-                <button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>
+                <div style="font-size:0.7rem;color:var(--white-muted);">Nota libre ${m.status === 'finished' && isDelegado() ? '<span style="color:var(--red);">(partido finalizado — solo lectura)</span>' : ''}</div>
+                ${!(m.status === 'finished' && isDelegado()) ? `<button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>` : ''}
               </div>
               <textarea id="match-log-${m.id}"
-                        style="width:100%;height:80px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:12px;color:var(--white);font-family:inherit;resize:vertical;"
-                        placeholder="Incidencias, árbitro, condiciones del campo...">${m.bitacora || ''}</textarea>
+                ${m.status === 'finished' && isDelegado() ? 'readonly' : ''}
+                style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:var(--white);font-family:inherit;resize:vertical;opacity:${m.status === 'finished' && isDelegado() ? 0.5 : 1};"
+                placeholder="Incidencias, árbitro, condiciones del campo...">${m.bitacora || ''}</textarea>
+            </div>` : ''}
+
+            <!-- Mensajes -->
+            <div style="margin-top:20px;border-top:2px solid rgba(255,255,255,0.07);padding-top:16px;">
+              <h3 style="color:var(--gold);font-family:var(--font-display);margin:0 0 12px;text-transform:uppercase;letter-spacing:1px;font-size:0.85rem;">✉️ Mensajes</h3>
+              <div id="match-mensajes-box">
+                ${renderMatchMessages(m)}
+              </div>
             </div>
+
           </div>
         `}
         </div>
@@ -1950,6 +1977,7 @@
   function setTurnResult(matchId, teamName, playerId, turnIdx, field, value) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     while (entry.turns.length <= turnIdx) {
@@ -1984,6 +2012,7 @@
   function setDefenseStat(matchId, teamName, playerId, field, value) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     entry.defense[field] = parseInt(value, 10) || 0;
@@ -2240,6 +2269,7 @@
   function cycleStatus(matchId, teamName, playerId) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     const cur = entry.status || (entry.starter === false ? 'suplente' : 'titular');
@@ -2256,6 +2286,7 @@
   function setPlayerOrder(matchId, teamName, playerId, newOrder) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     const n = parseInt(newOrder, 10);
@@ -2271,6 +2302,7 @@
   function makeSubstitution(matchId, teamName, subPlayerId, outPlayerId) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const outEntry = m.lineup[teamName].find(e => e.playerId === outPlayerId);
     const subEntry = m.lineup[teamName].find(e => e.playerId === subPlayerId);
     if (!outEntry || !subEntry) return;
@@ -2795,6 +2827,7 @@
     clearFieldDrag();
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
+    if (!canEditMatch(m)) return;
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
     const draggedEntry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!draggedEntry) return;
@@ -2900,10 +2933,227 @@
     clearFieldDrag();
   }
 
+  // ── MATCH MESSAGING ──
+
+  // Visibility: who can see a message
+  function canSeeMsg(msg) {
+    const cu = getCurrentUser();
+    if (cu.rol === 'superusuario' || cu.rol === 'admin') return true;
+    if (msg.from === cu.id) return true; // own messages always visible
+    if (msg.to === 'all') return true;
+    if (msg.to === 'all_delegados' && cu.rol === 'delegado') return true;
+    if (msg.to === cu.id) return true;
+    if (Array.isArray(msg.to) && msg.to.includes(cu.id)) return true;
+    return false;
+  }
+
+  // Resolve display name for 'to' field
+  function toLabel(to) {
+    if (to === 'all') return 'Todos';
+    if (to === 'all_delegados') return 'Todos los delegados';
+    if (Array.isArray(to)) {
+      return to.map(id => { const u = usuarios.find(x => x.id === id); return u ? u.nombre : id; }).join(', ');
+    }
+    const u = usuarios.find(x => x.id === to);
+    return u ? u.nombre : to;
+  }
+
+  function sendMatchMessage(matchId, to, text) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !text.trim()) return;
+    if (!m.mensajes) m.mensajes = [];
+    const cu = getCurrentUser();
+    m.mensajes.push({
+      id: 'msg-' + Date.now(),
+      timestamp: Date.now(),
+      from: cu.id,
+      fromNombre: cu.nombre || cu.id,
+      fromRol: cu.rol,
+      to,
+      text: text.trim(),
+      type: 'super_message',
+      replies: []
+    });
+    autoSave();
+    const box = document.getElementById('match-mensajes-box');
+    if (box) box.innerHTML = renderMatchMessages(m);
+    // Clear compose textarea
+    const ta = document.getElementById('compose-msg-text');
+    if (ta) ta.value = '';
+  }
+
+  function replyToMessage(matchId, msgId, text) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.mensajes || !text.trim()) return;
+    const msg = m.mensajes.find(x => x.id === msgId);
+    if (!msg) return;
+    const cu = getCurrentUser();
+    if (!msg.replies) msg.replies = [];
+    msg.replies.push({
+      id: 'reply-' + Date.now(),
+      timestamp: Date.now(),
+      from: cu.id,
+      fromNombre: cu.nombre || cu.id,
+      fromRol: cu.rol,
+      text: text.trim()
+    });
+    autoSave();
+    const box = document.getElementById('match-mensajes-box');
+    if (box) box.innerHTML = renderMatchMessages(m);
+  }
+
+  function requestContactSuper(matchId, text) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !text.trim()) return;
+    if (!m.mensajes) m.mensajes = [];
+    const cu = getCurrentUser();
+    // Find all super/admin IDs so only they can see this
+    const superIds = usuarios.filter(u => u.rol === 'superusuario' || u.rol === 'admin').map(u => u.id);
+    m.mensajes.push({
+      id: 'msg-' + Date.now(),
+      timestamp: Date.now(),
+      from: cu.id,
+      fromNombre: cu.nombre || cu.id,
+      fromRol: cu.rol,
+      to: superIds.length > 0 ? superIds : ['admin'],
+      text: text.trim(),
+      type: 'contact_request',
+      replies: []
+    });
+    autoSave();
+    const box = document.getElementById('match-mensajes-box');
+    if (box) box.innerHTML = renderMatchMessages(m);
+    const reqPanel = document.getElementById('contact-super-panel');
+    if (reqPanel) reqPanel.innerHTML = '<div style="font-size:0.8rem;color:var(--green);padding:8px 0;">✓ Mensaje enviado al supervisor.</div>';
+  }
+
+  function renderMatchMessages(m) {
+    if (typeof m === 'string') m = partidos.find(x => x.id === m);
+    if (!m) return '';
+    const cu = getCurrentUser();
+    const canSuper = isSuperuser() || isAdmin();
+    const isDeleg = isDelegado();
+    const msgs = (m.mensajes || []).filter(msg => canSeeMsg(msg)).slice().reverse();
+
+    let html = '';
+
+    // ── Super compose panel ──
+    if (canSuper) {
+      const delegList = usuarios.filter(u => u.rol === 'delegado' || u.rol === 'usuario');
+      const recipientOptions = [
+        '<option value="all">Todos los usuarios</option>',
+        '<option value="all_delegados">Todos los delegados</option>',
+        ...delegList.map(u => `<option value="${u.id}">${u.nombre} (${u.rol})</option>`)
+      ].join('');
+      html += `<div style="background:rgba(245,166,35,0.05);border:1px solid rgba(245,166,35,0.2);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="font-size:0.75rem;color:var(--gold);font-weight:700;margin-bottom:8px;">✉️ Nuevo mensaje</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:160px;">
+            <span style="font-size:0.7rem;color:var(--white-muted);white-space:nowrap;">Para:</span>
+            <select id="compose-msg-to" style="flex:1;padding:5px 8px;font-size:0.78rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(245,166,35,0.3);border-radius:6px;">
+              ${recipientOptions}
+            </select>
+          </div>
+        </div>
+        <textarea id="compose-msg-text" rows="2"
+          style="width:100%;padding:8px;font-size:0.8rem;background:rgba(0,0,0,0.3);color:var(--white);border:1px solid rgba(255,255,255,0.12);border-radius:8px;resize:vertical;"
+          placeholder="Escribe un mensaje para los delegados..."></textarea>
+        <div style="text-align:right;margin-top:6px;">
+          <button class="btn btn-primary" onclick="Admin.sendMatchMessage('${m.id}',document.getElementById('compose-msg-to').value,document.getElementById('compose-msg-text').value)" style="font-size:0.78rem;padding:6px 14px;">Enviar →</button>
+        </div>
+      </div>`;
+    }
+
+    // ── Messages list ──
+    if (msgs.length === 0) {
+      html += '<div style="font-size:0.8rem;color:var(--white-muted);text-align:center;padding:12px 0;">Sin mensajes aún.</div>';
+    }
+    for (const msg of msgs) {
+      const dt = new Date(msg.timestamp);
+      const timeStr = dt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = dt.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+      const isOwnMsg = msg.from === cu.id;
+      const isContactReq = msg.type === 'contact_request';
+      const headerColor = isContactReq ? '#aaa' : (isOwnMsg ? 'var(--gold)' : 'var(--white)');
+      const bgColor = isContactReq ? 'rgba(255,255,255,0.03)' : (isOwnMsg ? 'rgba(245,166,35,0.06)' : 'rgba(255,255,255,0.04)');
+      const borderColor = isContactReq ? 'rgba(255,255,255,0.07)' : (isOwnMsg ? 'rgba(245,166,35,0.2)' : 'rgba(255,255,255,0.08)');
+      const dirLabel = !isContactReq && canSuper ? ` <span style="font-size:0.65rem;color:var(--white-muted);">→ ${toLabel(msg.to)}</span>` : '';
+      const typeIcon = isContactReq ? '📩' : (msg.fromRol === 'superusuario' || msg.fromRol === 'admin' ? '📢' : '💬');
+
+      // Can this user reply to this message?
+      const canReply = !isContactReq && !isOwnMsg && (
+        msg.to === cu.id ||
+        msg.to === 'all' ||
+        (msg.to === 'all_delegados' && isDeleg) ||
+        (Array.isArray(msg.to) && msg.to.includes(cu.id))
+      );
+      // Supers can always reply
+      const canReplyFinal = canReply || (canSuper && !isOwnMsg);
+
+      html += `<div style="background:${bgColor};border:1px solid ${borderColor};border-radius:10px;padding:10px 12px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <span style="font-size:0.78rem;font-weight:700;color:${headerColor};">${typeIcon} ${msg.fromNombre}${dirLabel}</span>
+          <span style="font-size:0.65rem;color:var(--white-muted);">${dateStr} ${timeStr}</span>
+        </div>
+        <div style="font-size:0.82rem;color:var(--white);line-height:1.4;">${msg.text}</div>`;
+
+      // Replies
+      if (msg.replies && msg.replies.length > 0) {
+        html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);">';
+        for (const r of msg.replies) {
+          const rdt = new Date(r.timestamp);
+          const rTime = rdt.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+          html += `<div style="display:flex;gap:6px;margin-bottom:4px;">
+            <span style="font-size:0.7rem;color:var(--white-muted);flex-shrink:0;">${r.fromNombre} · ${rTime}</span>
+            <span style="font-size:0.75rem;color:var(--white);">${r.text}</span>
+          </div>`;
+        }
+        html += '</div>';
+      }
+
+      // Reply input
+      if (canReplyFinal) {
+        const replyId = 'reply-' + msg.id;
+        html += `<div style="display:flex;gap:6px;margin-top:8px;">
+          <input id="${replyId}" type="text" placeholder="Responder..."
+            style="flex:1;padding:5px 8px;font-size:0.75rem;background:rgba(0,0,0,0.3);color:var(--white);border:1px solid rgba(255,255,255,0.12);border-radius:6px;"
+            onkeydown="if(event.key==='Enter'){Admin.replyToMessage('${m.id}','${msg.id}',this.value);this.value='';}">
+          <button class="btn btn-sm btn-secondary" onclick="Admin.replyToMessage('${m.id}','${msg.id}',document.getElementById('${replyId}').value);document.getElementById('${replyId}').value='';" style="font-size:0.7rem;padding:4px 8px;">↩</button>
+        </div>`;
+      }
+
+      html += '</div>';
+    }
+
+    // ── Delegado: initiate contact with super ──
+    if (isDeleg) {
+      const hasPendingReq = (m.mensajes || []).some(msg =>
+        msg.type === 'contact_request' && msg.from === cu.id &&
+        (!msg.replies || msg.replies.length === 0)
+      );
+      html += `<div id="contact-super-panel" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">`;
+      if (hasPendingReq) {
+        html += '<div style="font-size:0.75rem;color:var(--white-muted);text-align:center;">Ya tienes una solicitud pendiente con el supervisor.</div>';
+      } else {
+        html += `<div style="font-size:0.75rem;color:var(--white-muted);margin-bottom:6px;">¿Necesitas contactar al supervisor?</div>
+          <div style="display:flex;gap:6px;">
+            <input id="contact-super-text" type="text" placeholder="Escribe tu mensaje..."
+              style="flex:1;padding:5px 8px;font-size:0.75rem;background:rgba(0,0,0,0.3);color:var(--white);border:1px solid rgba(255,255,255,0.12);border-radius:6px;"
+              onkeydown="if(event.key==='Enter'){Admin.requestContactSuper('${m.id}',this.value);}">
+            <button class="btn btn-sm btn-secondary" onclick="Admin.requestContactSuper('${m.id}',document.getElementById('contact-super-text').value);" style="font-size:0.7rem;white-space:nowrap;">Enviar al Super</button>
+          </div>`;
+      }
+      html += '</div>';
+    }
+
+    return html;
+  }
+
   // ── GAME LOG ──
   function logChange(matchId, type, description) {
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
+    if (m.status !== 'live') return; // only register changes during live game
     if (!m.log) m.log = [];
     const cu = getCurrentUser();
     m.log.push({
@@ -3092,6 +3342,11 @@
     // Game log
     acknowledgeLog,
     acknowledgeAllLogs,
+
+    // Messaging
+    sendMatchMessage,
+    replyToMessage,
+    requestContactSuper,
 
     // Lineup / Scorecard
     setLineupSubView,
