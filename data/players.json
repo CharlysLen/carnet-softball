@@ -30,6 +30,8 @@
       "estado": "habilitado",
       "verificado": true,
       "temporada": "2026",
+      "fechaAlta": "2026-01-15",
+      "aprobado": true,
       "stats": {
         "avg": ".345",
         "hr": "3",
@@ -49,6 +51,8 @@
       "estado": "habilitado",
       "verificado": true,
       "temporada": "2026",
+      "fechaAlta": "2026-01-15",
+      "aprobado": true,
       "stats": {
         "avg": ".290",
         "hr": "1",
@@ -68,6 +72,8 @@
       "estado": "suspendido",
       "verificado": false,
       "temporada": "2026",
+      "fechaAlta": "2026-02-01",
+      "aprobado": true,
       "stats": {
         "avg": ".310",
         "hr": "2",
@@ -87,6 +93,8 @@
       "estado": "habilitado",
       "verificado": true,
       "temporada": "2026",
+      "fechaAlta": "2026-01-20",
+      "aprobado": true,
       "stats": {
         "avg": ".275",
         "hr": "5",

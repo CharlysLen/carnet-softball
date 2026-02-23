@@ -40,36 +40,36 @@
     <header class="admin-header">
 
         <div class="admin-header-inner">
-            <div style="flex:1">
-                <h1 class="admin-title">🥎 PANEL DE ADMINISTRACIÓN</h1>
-                <div class="admin-subtitle">Liga Softball Masters +40 — Gestión Oficial</div>
+
+            <!-- Fila 1: Título + usuario (ambos en la misma fila en todos los tamaños) -->
+            <div class="admin-title-block">
+                <div>
+                    <h1 class="admin-title">🥎 PANEL DE ADMINISTRACIÓN</h1>
+                    <div class="admin-subtitle">Liga Softball Masters +40 — Gestión Oficial</div>
+                </div>
+                <div class="admin-user-info">
+                    <span id="current-user-badge" class="user-badge"></span>
+                    <button class="btn btn-secondary btn-logout" id="btn-logout" onclick="Admin.logout()">Salir</button>
+                </div>
             </div>
 
-            <nav style="display:flex;gap:20px;margin-right:auto;margin-left:40px;">
-                <a href="#" class="nav-link active" onclick="Admin.switchTab('teams')"
-                    style="color:var(--white);text-decoration:none;font-weight:600;font-size:0.9rem;">🛡 EQUIPOS</a>
-                <a href="#" class="nav-link" onclick="Admin.switchTab('calendar')"
-                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">📅 CALENDARIO</a>
-                <a href="#" class="nav-link" onclick="Admin.switchTab('standings')"
-                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">🏆 CLASIFICACIÓN</a>
-                <a href="#" class="nav-link" id="nav-lineup" onclick="Admin.switchTab('lineup')"
-                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;">📋 ALINEACIONES</a>
-                <a href="#" class="nav-link admin-only" id="nav-users" onclick="Admin.switchTab('users')"
-                    style="color:var(--white-muted);text-decoration:none;font-size:0.9rem;display:none;">👥 USUARIOS</a>
+            <!-- Fila 2: Navegación (solo emojis en móvil, texto completo en escritorio) -->
+            <nav class="admin-nav">
+                <a href="#" class="nav-link active" onclick="Admin.switchTab('teams')">🛡 <span class="nav-text">Equipos</span></a>
+                <a href="#" class="nav-link" onclick="Admin.switchTab('calendar')">📅 <span class="nav-text">Calendario</span></a>
+                <a href="#" class="nav-link" onclick="Admin.switchTab('standings')">🏆 <span class="nav-text">Clasificación</span></a>
+                <a href="#" class="nav-link" id="nav-lineup" onclick="Admin.switchTab('lineup')">📋 <span class="nav-text">Alineaciones</span></a>
+                <a href="#" class="nav-link admin-only" id="nav-users" onclick="Admin.switchTab('users')" style="display:none;">👥 <span class="nav-text">Usuarios</span></a>
             </nav>
 
-            <div style="display:flex;align-items:center;gap:10px;margin-left:auto;">
-                <span id="current-user-badge" style="font-size:0.75rem;color:var(--white-muted);"></span>
-                <button class="btn btn-secondary" id="btn-logout" style="font-size:0.75rem;padding:6px 12px;" onclick="Admin.logout()">Salir</button>
-            </div>
-
+            <!-- Fila 3: Botones de acción -->
             <div class="admin-actions">
                 <button class="btn btn-secondary" id="btn-add-team" style="display:none;">🛡 Nuevo Equipo</button>
                 <button class="btn btn-secondary" id="btn-add-player" style="display:none;">+ Nuevo Jugador</button>
-                <button class="btn btn-secondary" id="btn-import-csv" style="display:none;">📄 Importar CSV</button>
-                <button class="btn btn-secondary" id="btn-export" style="display:none;">⬇ Exportar JSON</button>
-                <a href="qr-generator.html" class="btn btn-secondary" id="btn-qr" style="text-decoration:none;display:none;">📱 Códigos QR</a>
-                <button class="btn btn-secondary" id="btn-demo" style="display:none;background:var(--bg-card);border:1px solid var(--gold);color:var(--gold);">🎲 Datos Demo</button>
+                <button class="btn btn-secondary" id="btn-import-csv" style="display:none;">📄 CSV</button>
+                <button class="btn btn-secondary" id="btn-export" style="display:none;">⬇ JSON</button>
+                <a href="qr-generator.html" class="btn btn-secondary" id="btn-qr" style="text-decoration:none;display:none;">📱 QR</a>
+                <button class="btn btn-secondary" id="btn-demo" style="display:none;background:var(--bg-card);border:1px solid var(--gold);color:var(--gold);">🎲 Demo</button>
                 <button class="btn btn-secondary" id="btn-reset" title="Borrar todo" style="display:none;color:var(--red);border-color:var(--red);">🗑</button>
             </div>
         </div>
