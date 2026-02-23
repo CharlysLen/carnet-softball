@@ -1749,16 +1749,16 @@
       if (btnQR) btnQR.style.display = (admin || superuser || delegado) ? '' : 'none';
     }
 
-    // User badge with role label
-    const roleLabels = { admin: 'Admin', superusuario: 'Super', delegado: 'Delegado', usuario: 'Jugador' };
+    // User badge — compact single-line: [avatar] [first name] [role tag]
     const roleColors = { admin: '#f5a623', superusuario: '#3498db', delegado: '#1abc9c', usuario: '#95a5a6' };
+    const roleAbrev  = { admin: 'ADMIN', superusuario: 'SUPER', delegado: 'DEL', usuario: 'JUG' };
     const badge = document.getElementById('current-user-badge');
     if (badge) {
-      const initial = (user.nombre || '?')[0].toUpperCase();
-      const color = roleColors[user.rol] || '#95a5a6';
-      const rolLabel = roleLabels[user.rol] || user.rol;
-      const teamStr = (delegado || usuario) && user.equipo ? `<span class="user-badge-team">${user.equipo}</span>` : '';
-      badge.innerHTML = `<span class="user-badge-avatar" style="background:${color}22;color:${color};border:1px solid ${color}66;">${initial}</span><span class="user-badge-info"><span class="user-badge-name">${user.nombre}</span><span class="user-badge-role" style="color:${color};">${rolLabel}${teamStr ? ' · ' : ''}${teamStr ? user.equipo : ''}</span></span>`;
+      const initial   = (user.nombre || '?')[0].toUpperCase();
+      const color     = roleColors[user.rol] || '#95a5a6';
+      const firstName = (user.nombre || '').split(' ')[0] || '?';
+      const rolTag    = roleAbrev[user.rol] || (user.rol || '').toUpperCase();
+      badge.innerHTML = `<span class="user-badge-avatar" style="background:${color}22;color:${color};border:1px solid ${color}66;">${initial}</span><span class="user-badge-name">${firstName}</span><span class="user-badge-roletag" style="background:${color}18;color:${color};">${rolTag}</span>`;
     }
 
     // Change panel title for non-admin roles

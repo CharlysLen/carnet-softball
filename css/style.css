@@ -661,42 +661,40 @@ body.admin-body {
 .user-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--bg-card-inner);
   border-radius: 8px;
-  padding: 5px 10px;
+  padding: 5px 8px;
   white-space: nowrap;
-  min-width: 0;
+  flex-shrink: 0;
 }
 .user-badge-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   flex-shrink: 0;
 }
-.user-badge-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
 .user-badge-name {
-  font-size: 0.73rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--white);
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 90px;
   white-space: nowrap;
 }
-.user-badge-role {
-  font-size: 0.62rem;
-  font-weight: 500;
-  opacity: 0.9;
+.user-badge-roletag {
+  font-size: 0.58rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .admin-title {
@@ -2047,23 +2045,23 @@ body.qr-body {
     min-height: 36px;
   }
 
-  /* Badge usuario */
+  /* Badge usuario — móvil */
   .user-badge {
-    padding: 4px 8px;
-    gap: 6px;
-    max-width: 150px;
+    padding: 4px 7px;
+    gap: 5px;
   }
   .user-badge-avatar {
-    width: 22px;
-    height: 22px;
-    font-size: 0.68rem;
+    width: 20px;
+    height: 20px;
+    font-size: 0.62rem;
   }
   .user-badge-name {
-    font-size: 0.64rem;
-    max-width: 80px;
+    font-size: 0.62rem;
+    max-width: 60px;
   }
-  .user-badge-role {
-    font-size: 0.56rem;
+  .user-badge-roletag {
+    font-size: 0.52rem;
+    padding: 1px 4px;
   }
 
   /* ── CONTENIDO ── */
