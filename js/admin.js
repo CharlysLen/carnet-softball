@@ -38,8 +38,10 @@
     const u = getCurrentUser();
     if (!u.equipo) return null;
     // Match by nombre or id (case-insensitive) for robustness
-    return equipos.find(e => e.nombre === u.equipo || e.id === u.equipo ||
+    const found = equipos.find(e => e.nombre === u.equipo || e.id === u.equipo ||
       e.nombre.toLowerCase() === u.equipo.toLowerCase() || e.id.toLowerCase() === u.equipo.toLowerCase());
+    // Fallback: if team not in equipos array yet (race condition / not loaded), return synthetic object
+    return found || { nombre: u.equipo, id: u.equipo };
   }
   // Returns true if current user can make edits to a live/scheduled match.
   // Delegados: only while match is live. Admin/super: always.
@@ -89,9 +91,14 @@
     if (isUsuario()) return false;
     if (isAdmin() || isSuperuser()) return true;
     if (!isDelegado()) return false;
+    const u = getCurrentUser();
+    if (!u.equipo) return false;
+    const tn = (teamName || '').toLowerCase();
+    // Direct match: stored equipo name vs teamName (most robust — no dependency on equipos array)
+    if (u.equipo.toLowerCase() === tn) return true;
+    // Also check via getDelegadoTeam to support team-id-based stored equipo values
     const dt = getDelegadoTeam();
     if (!dt) return false;
-    const tn = (teamName || '').toLowerCase();
     return dt.nombre.toLowerCase() === tn || dt.id.toLowerCase() === tn;
   }
   // Only Admin & Superusuario can toggle estado/verificado
