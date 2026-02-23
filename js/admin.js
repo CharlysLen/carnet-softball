@@ -50,6 +50,41 @@
     return false;
   }
 
+  // Returns true if the match bitácora/log window is open for the current user.
+  // Admin: always. Superusuario/delegado: 1h before scheduled time → 1h after endedAt.
+  function isMatchWindowOpen(match) {
+    if (!match) return false;
+    if (isAdmin()) return true;
+    if (match.status === 'live') return true; // live game is always writable
+
+    const now = Date.now();
+    const [h, mn] = (match.hora || '00:00').split(':').map(Number);
+    const matchDate = new Date(match.fecha);
+    matchDate.setHours(h, mn, 0, 0);
+    const windowStart = matchDate.getTime() - 60 * 60 * 1000;
+
+    if (now < windowStart) return false; // too early
+
+    if (match.status === 'finished') {
+      if (!match.endedAt) return false;
+      const windowEnd = new Date(match.endedAt).getTime() + 60 * 60 * 1000;
+      return now <= windowEnd;
+    }
+
+    // scheduled but already within the pre-match window
+    return true;
+  }
+
+  // Returns true if the current user can edit the lineup for a given team/match.
+  function canEditLineup(match, teamName) {
+    if (!match) return false;
+    if (isAdmin()) return true;
+    if (match.status === 'finished') return false;
+    if (isSuperuser()) return true;
+    if (isDelegado()) return canEditTeam(teamName); // scheduled or live
+    return false;
+  }
+
   function canEditTeam(teamName) {
     if (isUsuario()) return false;
     if (isAdmin() || isSuperuser()) return true;
@@ -1601,17 +1636,34 @@
               ${renderMatchLog(m)}
             </div>
 
-            ${(isAdmin() || isSuperuser() || (isDelegado() && m.status === 'live')) ? `
-            <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                <div style="font-size:0.7rem;color:var(--white-muted);">Nota libre ${m.status === 'finished' && isDelegado() ? '<span style="color:var(--red);">(partido finalizado — solo lectura)</span>' : ''}</div>
-                ${!(m.status === 'finished' && isDelegado()) ? `<button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>` : ''}
+            ${(isAdmin() || isSuperuser() || isDelegado()) ? (() => {
+              const windowOpen = isMatchWindowOpen(m);
+              const canWrite = isAdmin() || windowOpen;
+              let windowLabel = '';
+              if (!isAdmin()) {
+                if (windowOpen) {
+                  windowLabel = '<span class="window-open">✓ Ventana abierta</span>';
+                } else if (m.status === 'finished') {
+                  windowLabel = '<span class="window-closed">🔒 Ventana cerrada</span>';
+                } else {
+                  const [wh, wm] = (m.hora || '00:00').split(':').map(Number);
+                  const wd = new Date(m.fecha);
+                  wd.setHours(wh - 1, wm, 0, 0);
+                  const openTime = wd.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                  windowLabel = `<span class="window-closed">🔒 Disponible desde las ${openTime}</span>`;
+                }
+              }
+              return `<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
+                <div style="font-size:0.7rem;color:var(--white-muted);">Nota libre ${windowLabel}</div>
+                ${canWrite ? `<button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>` : ''}
               </div>
               <textarea id="match-log-${m.id}"
-                ${m.status === 'finished' && isDelegado() ? 'readonly' : ''}
-                style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:var(--white);font-family:inherit;resize:vertical;opacity:${m.status === 'finished' && isDelegado() ? 0.5 : 1};"
+                ${canWrite ? '' : 'readonly'}
+                style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:var(--white);font-family:inherit;resize:vertical;opacity:${canWrite ? 1 : 0.5};"
                 placeholder="Incidencias, árbitro, condiciones del campo...">${m.bitacora || ''}</textarea>
-            </div>` : ''}
+            </div>`;
+            })() : ''}
 
             <!-- Mensajes -->
             <div style="margin-top:20px;border-top:2px solid rgba(255,255,255,0.07);padding-top:16px;">
@@ -1691,9 +1743,16 @@
     }
 
     // User badge with role label
-    const roleLabels = { admin: 'Admin', superusuario: 'Superusuario', delegado: 'Delegado', usuario: 'Jugador' };
+    const roleLabels = { admin: 'Admin', superusuario: 'Super', delegado: 'Delegado', usuario: 'Jugador' };
+    const roleColors = { admin: '#f5a623', superusuario: '#3498db', delegado: '#1abc9c', usuario: '#95a5a6' };
     const badge = document.getElementById('current-user-badge');
-    if (badge) badge.textContent = `${user.nombre} (${roleLabels[user.rol] || user.rol}${(delegado || usuario) ? ' · ' + (user.equipo || 'Sin equipo') : ''})`;
+    if (badge) {
+      const initial = (user.nombre || '?')[0].toUpperCase();
+      const color = roleColors[user.rol] || '#95a5a6';
+      const rolLabel = roleLabels[user.rol] || user.rol;
+      const teamStr = (delegado || usuario) && user.equipo ? `<span class="user-badge-team">${user.equipo}</span>` : '';
+      badge.innerHTML = `<span class="user-badge-avatar" style="background:${color}22;color:${color};border:1px solid ${color}66;">${initial}</span><span class="user-badge-info"><span class="user-badge-name">${user.nombre}</span><span class="user-badge-role" style="color:${color};">${rolLabel}${teamStr ? ' · ' : ''}${teamStr ? user.equipo : ''}</span></span>`;
+    }
 
     // Change panel title for non-admin roles
     const titleEl = document.querySelector('.admin-title');
@@ -2324,7 +2383,7 @@
   function cycleStatus(matchId, teamName, playerId) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
-    if (!canEditMatch(m)) return;
+    if (!canEditLineup(m, teamName)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     const cur = entry.status || (entry.starter === false ? 'suplente' : 'titular');
@@ -2341,7 +2400,7 @@
   function setPlayerOrder(matchId, teamName, playerId, newOrder) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
-    if (!canEditMatch(m)) return;
+    if (!canEditLineup(m, teamName)) return;
     const entry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!entry) return;
     const n = parseInt(newOrder, 10);
@@ -2357,7 +2416,7 @@
   function makeSubstitution(matchId, teamName, subPlayerId, outPlayerId) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
-    if (!canEditMatch(m)) return;
+    if (!canEditLineup(m, teamName)) return;
     const outEntry = m.lineup[teamName].find(e => e.playerId === outPlayerId);
     const subEntry = m.lineup[teamName].find(e => e.playerId === subPlayerId);
     if (!outEntry || !subEntry) return;
@@ -2733,43 +2792,90 @@
       </div>`;
     }
 
+    // ── Enviar Alineación section ──
+    if (canEditLineup(match, teamName)) {
+      const sentInfo = match.lineupSent && match.lineupSent[teamName];
+      const sentBadge = sentInfo
+        ? `<span class="lineup-sent-badge">✓ Enviada a las ${new Date(sentInfo.sentAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })} por ${sentInfo.sentByName}</span>`
+        : `<span class="lineup-draft-badge">Borrador — pendiente de envío</span>`;
+      html += `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        ${sentBadge}
+        <button class="btn btn-primary" style="font-size:0.82rem;" onclick="Admin.enviarAlineacion('${mid}','${tn}')">📤 Enviar Alineación al partido</button>
+      </div>`;
+    }
+
     return html;
   }
 
   function renderLineupList() {
     const c = document.getElementById('main-content');
-    const matchesWithLineup = partidos.filter(m => m.lineup && Object.keys(m.lineup).length > 0);
-    const matchesWithout = partidos.filter(m => !m.lineup || Object.keys(m.lineup).length === 0);
+    const dt = getDelegadoTeam();
+
+    // Helper: returns badge HTML for a team's lineup status in a match
+    function lineupStatusBadge(match, teamName) {
+      const hasPlayers = match.lineup && match.lineup[teamName] && match.lineup[teamName].length > 0;
+      const sent = match.lineupSent && match.lineupSent[teamName];
+      if (sent) return `<span class="lineup-sent-badge">✓ Enviada</span>`;
+      if (hasPlayers) return `<span class="lineup-draft-badge">Borrador</span>`;
+      return `<span style="font-size:0.75rem;color:var(--white-muted);background:rgba(255,255,255,0.06);border-radius:4px;padding:2px 8px;">Sin alineación</span>`;
+    }
 
     let html = '<div style="max-width:900px;margin:0 auto;">';
     html += '<h2 style="font-family:var(--font-display);margin-bottom:20px;">📋 Alineaciones</h2>';
 
-    if (matchesWithLineup.length > 0) {
-      html += '<h3 style="color:var(--gold);font-size:0.85rem;margin-bottom:10px;">Con alineación registrada</h3>';
-      for (const m of matchesWithLineup) {
-        const teams = Object.keys(m.lineup).join(' vs ');
-        html += `<div onclick="Admin.viewMatch('${m.id}','local')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);display:flex;justify-content:space-between;align-items:center;transition:background 0.2s;" onmouseover="this.style.background='var(--bg-card-inner)'" onmouseout="this.style.background='var(--bg-card)'">
-          <div>
-            <div style="font-weight:700;">${m.local} vs ${m.visitante}</div>
-            <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha} • ${m.jornada || ''}</div>
-          </div>
-          <div style="font-size:0.75rem;color:var(--gold);">${teams}</div>
-        </div>`;
-      }
-    }
-
-    if (matchesWithout.length > 0 && (isAdmin() || isSuperuser() || isDelegado())) {
-      html += '<h3 style="color:var(--white-muted);font-size:0.85rem;margin:20px 0 10px;">Sin alineación</h3>';
-      for (const m of matchesWithout) {
-        html += `<div onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
-          <div style="font-weight:700;">${m.local} vs ${m.visitante}</div>
-          <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha} • ${m.jornada || ''}</div>
-        </div>`;
-      }
-    }
-
     if (partidos.length === 0) {
       html += '<div style="text-align:center;color:var(--white-muted);padding:40px;">No hay partidos en el calendario.</div>';
+      html += '</div>';
+      c.innerHTML = html;
+      return;
+    }
+
+    // For delegado: show only matches involving their team, most relevant first
+    const matchList = isDelegado() && dt
+      ? partidos.filter(m => m.local === dt.nombre || m.visitante === dt.nombre)
+      : partidos;
+
+    if (isDelegado() && dt && matchList.length === 0) {
+      html += `<div style="text-align:center;color:var(--white-muted);padding:40px;">No hay partidos asignados al equipo <strong>${dt.nombre}</strong>.</div>`;
+      html += '</div>';
+      c.innerHTML = html;
+      return;
+    }
+
+    for (const m of matchList) {
+      const statusLabel = m.status === 'live'
+        ? '<span class="live-badge" style="font-size:0.65rem;">● EN VIVO</span>'
+        : m.status === 'finished'
+          ? '<span style="font-size:0.65rem;padding:2px 7px;border-radius:8px;background:rgba(244,67,54,0.15);color:var(--red);">Finalizado</span>'
+          : '<span style="font-size:0.65rem;padding:2px 7px;border-radius:8px;background:rgba(255,255,255,0.07);color:var(--white-muted);">Programado</span>';
+
+      // Determine which team(s) to show badges for
+      const teamsToShow = isDelegado() && dt
+        ? [dt.nombre]
+        : [m.local, m.visitante];
+
+      const badgesHtml = teamsToShow.map(tn =>
+        `<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--white-muted);">
+          <span style="font-weight:600;">${tn}:</span> ${lineupStatusBadge(m, tn)}
+        </div>`
+      ).join('');
+
+      // Navigate delegado directly to their team's sub-view tab
+      const subView = (isDelegado() && dt && m.visitante === dt.nombre) ? 'visitante' : 'local';
+      html += `<div onclick="Admin.viewMatch('${m.id}','${subView}')"
+        style="background:var(--bg-card);border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.05);transition:background 0.2s;"
+        onmouseover="this.style.background='var(--bg-card-inner)'" onmouseout="this.style.background='var(--bg-card)'">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;margin-bottom:4px;">${m.local} vs ${m.visitante}</div>
+            <div style="font-size:0.75rem;color:var(--white-muted);">${m.fecha}${m.hora ? ' · ' + m.hora : ''}${m.jornada ? ' · ' + m.jornada : ''}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+            ${statusLabel}
+            ${badgesHtml}
+          </div>
+        </div>
+      </div>`;
     }
 
     html += '</div>';
@@ -2842,6 +2948,10 @@
   function saveMatchLog(id, text) {
     const match = partidos.find(p => p.id === id);
     if (!match) return;
+    if (!isMatchWindowOpen(match)) {
+      alert('Solo puedes escribir en la bitácora durante la ventana del partido (1 hora antes hasta 1 hora después de finalizar).');
+      return;
+    }
     const prev = (match.bitacora || '').trim();
     const next = text.trim();
     match.bitacora = text;
@@ -2882,7 +2992,7 @@
     clearFieldDrag();
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
-    if (!canEditMatch(m)) return;
+    if (!canEditLineup(m, teamName)) return;
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
     const draggedEntry = m.lineup[teamName].find(e => e.playerId === playerId);
     if (!draggedEntry) return;
@@ -3259,7 +3369,7 @@
   function logChange(matchId, type, description) {
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
-    if (m.status !== 'live') return; // only register changes during live game
+    if (!isMatchWindowOpen(m)) return; // only register changes within the match window
     if (!m.log) m.log = [];
     const cu = getCurrentUser();
     m.log.push({
@@ -3291,7 +3401,7 @@
     if (!m) return;
     if (!confirm('¿Finalizar el partido? Esta acción declarará el partido como terminado.')) return;
 
-    // Build final summary before changing status (logChange guard requires 'live')
+    // Build final summary before changing status (logChange guard passes while live)
     const totalChanges = (m.log || []).length;
     let localScore = 0, visitScore = 0;
     if (m.playerStats) {
@@ -3400,6 +3510,21 @@
     return html;
   }
 
+  // ── ENVIAR ALINEACIÓN ──
+  function enviarAlineacion(matchId, teamName) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m) return;
+    if (!canEditLineup(m, teamName)) { alert('No tienes permisos para enviar esta alineación.'); return; }
+    const lineup = m.lineup && m.lineup[teamName];
+    if (!lineup || lineup.length === 0) { alert('Añade al menos un jugador antes de enviar la alineación.'); return; }
+    if (!m.lineupSent) m.lineupSent = {};
+    const cu = getCurrentUser();
+    m.lineupSent[teamName] = { sentAt: new Date().toISOString(), sentBy: cu.id, sentByName: cu.nombre || cu.id };
+    autoSave();
+    renderView();
+    alert(`Alineación de ${teamName} enviada al partido${m.jornada ? ' — Jornada ' + m.jornada : ''} (${m.fecha})`);
+  }
+
   window.Admin = {
     init,
     renderView,
@@ -3479,6 +3604,7 @@
     requestContactSuper,
 
     // Lineup / Scorecard
+    enviarAlineacion,
     setLineupSubView,
     initLineupForMatch,
     setTurnResult,
