@@ -136,13 +136,13 @@
       if (!val || !val.jugadores) return;
 
       // Update local state from Firebase
-      if (val.equipos)   equipos  = val.equipos;
-      if (val.jugadores) players  = val.jugadores;
-      if (val.partidos)  partidos = val.partidos;
-      if (val.usuarios)  usuarios = val.usuarios;
+      if (val.equipos) equipos = val.equipos;
+      if (val.jugadores) players = val.jugadores;
+      if (val.partidos) partidos = val.partidos;
+      if (val.usuarios) usuarios = val.usuarios;
 
       // Update localStorage cache
-      try { localStorage.setItem('softball40_data', JSON.stringify({ equipos, jugadores: players, partidos, usuarios })); } catch(e) {}
+      try { localStorage.setItem('softball40_data', JSON.stringify({ equipos, jugadores: players, partidos, usuarios })); } catch (e) { }
 
       // Re-render — but skip if user is actively typing in an input/textarea
       const ae = document.activeElement;
@@ -402,8 +402,8 @@
               ${canEdit && (p.email || p.telefono) ? `<div style="font-size:0.55rem;color:var(--white-muted);margin-top:2px;">${p.email ? '✉ ' + p.email : ''}${p.email && p.telefono ? ' · ' : ''}${p.telefono ? '📞 ' + p.telefono : ''}</div>` : ''}
             </div>
             ${pendienteAprobacion
-              ? `<div class="roster-status pendiente"><span class="roster-status-dot"></span>Pendiente de aprobación</div>`
-              : `<div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>`}
+            ? `<div class="roster-status pendiente"><span class="roster-status-dot"></span>Pendiente de aprobación</div>`
+            : `<div class="roster-status ${p.estado}"><span class="roster-status-dot"></span>${isHab ? 'Habilitado' : 'Suspendido'}</div>`}
             <div class="roster-actions">
               ${canEdit ? `<button class="btn btn-sm btn-secondary" onclick="Admin.editPlayer('${p.id}')" title="Editar">✏️</button>` : ''}
               ${pendienteAprobacion && (isAdmin() || isSuperuser()) ? `<button class="btn btn-sm btn-success" onclick="Admin.aprobarJugador('${p.id}')" title="Aprobar jugador">✔ Aprobar</button>` : ''}
@@ -1307,8 +1307,8 @@
       const statusBadge = m.status === 'live'
         ? `<span class="live-badge">● EN VIVO</span>`
         : m.status === 'finished'
-        ? `<span style="font-size:0.6rem;color:var(--white-muted);background:rgba(255,255,255,0.06);border-radius:10px;padding:2px 7px;">✓ FINALIZADO</span>`
-        : '';
+          ? `<span style="font-size:0.6rem;color:var(--white-muted);background:rgba(255,255,255,0.06);border-radius:10px;padding:2px 7px;">✓ FINALIZADO</span>`
+          : '';
       const cardBorder = m.status === 'live' ? 'rgba(0,200,100,0.3)' : 'rgba(255,255,255,0.05)';
       html += `
          <div class="match-card" onclick="Admin.viewMatch('${m.id}')" style="background:var(--bg-card);border-radius:12px;padding:15px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;border:1px solid ${cardBorder};cursor:pointer;transition:transform 0.2s, background 0.2s;">
@@ -1547,13 +1547,13 @@
       <div class="match-detail-view" style="max-width:900px;margin:0 auto;animation:fadeIn 0.4s ease;">
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center;">
           <button class="btn btn-secondary" onclick="Admin.backToCalendar()">← Volver al Calendario</button>
-          ${(isAdmin() || isSuperuser()) ? `
+          ${(isAdmin() || isSuperuser() || (isDelegado() && (canEditTeam(m.local) || canEditTeam(m.visitante)))) ? `
             ${m.status === 'live'
-              ? `<button class="btn btn-danger" onclick="Admin.endGame('${m.id}')" style="font-weight:700;">🏁 Finalizar Partido</button>`
-              : m.status === 'finished'
-              ? `<span style="font-size:0.8rem;color:var(--white-muted);padding:6px 10px;">✓ Partido finalizado</span>`
-              : `<button class="btn btn-primary" onclick="Admin.startGame('${m.id}')" style="font-weight:700;">▶️ Iniciar Partido</button>`
-            }
+          ? `<button class="btn btn-danger" onclick="Admin.endGame('${m.id}')" style="font-weight:700;">🏁 Finalizar Partido</button>`
+          : m.status === 'finished'
+            ? `<span style="font-size:0.8rem;color:var(--white-muted);padding:6px 10px;">✓ Partido finalizado</span>`
+            : `<button class="btn btn-primary" onclick="Admin.startGame('${m.id}')" style="font-weight:700;">▶️ Iniciar Partido</button>`
+        }
           ` : ''}
           ${canEditTeam(m.local) || canEditTeam(m.visitante) ? `
             <button class="btn btn-secondary" onclick="Admin.openCreateMatch('${m.id}')" title="Editar partido">✏️ Editar</button>
@@ -1594,19 +1594,19 @@
         <!-- Sub-tabs -->
         <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
           ${['resumen', 'local', 'visitante', 'bitacora'].map(tab => {
-            const pendingLogs = (isAdmin() || isSuperuser()) ? (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length : 0;
-            const unreadMsgs = getUnreadMsgCount(m);
-            const totalBadge = pendingLogs + unreadMsgs;
-            const bitacoraLabel = totalBadge > 0
-              ? `📝 Bitácora <span style="background:${unreadMsgs > 0 ? '#e53935' : 'var(--gold)'};color:#fff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${totalBadge}</span>`
-              : '📝 Bitácora';
-            const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
-            const active = lineupSubView === tab;
-            return `<button onclick="Admin.setLineupSubView('${tab}')"
+          const pendingLogs = (isAdmin() || isSuperuser()) ? (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length : 0;
+          const unreadMsgs = getUnreadMsgCount(m);
+          const totalBadge = pendingLogs + unreadMsgs;
+          const bitacoraLabel = totalBadge > 0
+            ? `📝 Bitácora <span style="background:${unreadMsgs > 0 ? '#e53935' : 'var(--gold)'};color:#fff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${totalBadge}</span>`
+            : '📝 Bitácora';
+          const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
+          const active = lineupSubView === tab;
+          return `<button onclick="Admin.setLineupSubView('${tab}')"
               style="padding:10px 16px;font-size:0.8rem;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
               background:transparent;color:${active ? 'var(--gold)' : 'var(--white-muted)'};cursor:pointer;margin-bottom:-2px;transition:all 0.2s;">
               ${labels[tab]}</button>`;
-          }).join('')}
+        }).join('')}
         </div>
 
         <div style="margin-top:20px;">
@@ -1644,23 +1644,23 @@
             </div>
 
             ${(isAdmin() || isSuperuser() || isDelegado()) ? (() => {
-              const windowOpen = isMatchWindowOpen(m);
-              const canWrite = isAdmin() || windowOpen;
-              let windowLabel = '';
-              if (!isAdmin()) {
-                if (windowOpen) {
-                  windowLabel = '<span class="window-open">✓ Ventana abierta</span>';
-                } else if (m.status === 'finished') {
-                  windowLabel = '<span class="window-closed">🔒 Ventana cerrada</span>';
-                } else {
-                  const [wh, wm] = (m.hora || '00:00').split(':').map(Number);
-                  const wd = new Date(m.fecha);
-                  wd.setHours(wh - 1, wm, 0, 0);
-                  const openTime = wd.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-                  windowLabel = `<span class="window-closed">🔒 Disponible desde las ${openTime}</span>`;
-                }
-              }
-              return `<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">
+        const windowOpen = isMatchWindowOpen(m);
+        const canWrite = isAdmin() || windowOpen;
+        let windowLabel = '';
+        if (!isAdmin()) {
+          if (windowOpen) {
+            windowLabel = '<span class="window-open">✓ Ventana abierta</span>';
+          } else if (m.status === 'finished') {
+            windowLabel = '<span class="window-closed">🔒 Ventana cerrada</span>';
+          } else {
+            const [wh, wm] = (m.hora || '00:00').split(':').map(Number);
+            const wd = new Date(m.fecha);
+            wd.setHours(wh - 1, wm, 0, 0);
+            const openTime = wd.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            windowLabel = `<span class="window-closed">🔒 Disponible desde las ${openTime}</span>`;
+          }
+        }
+        return `<div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.07);padding-top:12px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:4px;">
                 <div style="font-size:0.7rem;color:var(--white-muted);">Nota libre ${windowLabel}</div>
                 ${canWrite ? `<button class="btn btn-sm btn-secondary" onclick="Admin.saveMatchLog('${m.id}',document.getElementById('match-log-${m.id}').value)" style="font-size:0.7rem;padding:4px 10px;">📤 Añadir al registro</button>` : ''}
@@ -1670,7 +1670,7 @@
                 style="width:100%;height:70px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px;color:var(--white);font-family:inherit;resize:vertical;opacity:${canWrite ? 1 : 0.5};"
                 placeholder="Incidencias, árbitro, condiciones del campo...">${m.bitacora || ''}</textarea>
             </div>`;
-            })() : ''}
+      })() : ''}
 
             <!-- Mensajes -->
             <div style="margin-top:20px;border-top:2px solid rgba(255,255,255,0.07);padding-top:16px;">
@@ -1751,13 +1751,13 @@
 
     // User badge — compact single-line: [avatar] [first name] [role tag]
     const roleColors = { admin: '#f5a623', superusuario: '#3498db', delegado: '#1abc9c', usuario: '#95a5a6' };
-    const roleAbrev  = { admin: 'ADMIN', superusuario: 'SUPER', delegado: 'DEL', usuario: 'JUG' };
+    const roleAbrev = { admin: 'ADMIN', superusuario: 'SUPER', delegado: 'DEL', usuario: 'JUG' };
     const badge = document.getElementById('current-user-badge');
     if (badge) {
-      const initial   = (user.nombre || '?')[0].toUpperCase();
-      const color     = roleColors[user.rol] || '#95a5a6';
+      const initial = (user.nombre || '?')[0].toUpperCase();
+      const color = roleColors[user.rol] || '#95a5a6';
       const firstName = (user.nombre || '').split(' ')[0] || '?';
-      const rolTag    = roleAbrev[user.rol] || (user.rol || '').toUpperCase();
+      const rolTag = roleAbrev[user.rol] || (user.rol || '').toUpperCase();
       badge.innerHTML = `<span class="user-badge-avatar" style="background:${color}22;color:${color};border:1px solid ${color}66;">${initial}</span><span class="user-badge-name">${firstName}</span><span class="user-badge-roletag" style="background:${color}18;color:${color};">${rolTag}</span>`;
     }
 
@@ -1773,7 +1773,7 @@
   function logout() {
     sessionStorage.clear();
     if (typeof firebaseAuth !== 'undefined') {
-      firebaseAuth.signOut().catch(() => {});
+      firebaseAuth.signOut().catch(() => { });
     }
     location.reload();
   }
@@ -2181,13 +2181,13 @@
 
     const st = entry.status || (entry.starter === false ? 'suplente' : entry.starter === 'ausente' ? 'ausente' : 'titular');
     const STATUS_STYLES = {
-      titular:   { bg: 'rgba(0,230,118,0.15)',  color: 'var(--green)',      label: 'Titular',   icon: '⚾',  next: 'lesionado', nextLabel: 'Lesionado' },
-      lesionado: { bg: 'rgba(255,152,0,0.15)',   color: '#ff9800',           label: 'Lesionado', icon: '🚑',  next: 'suplente',  nextLabel: 'Suplente' },
-      suplente:  { bg: 'rgba(255,255,255,0.08)', color: 'var(--white-muted)',label: 'Suplente',  icon: '📋', next: 'ausente',   nextLabel: 'Ausente' },
-      ausente:   { bg: 'rgba(244,67,54,0.15)',   color: 'var(--red)',        label: 'Ausente',   icon: '❌',  next: 'titular',   nextLabel: 'Titular' }
+      titular: { bg: 'rgba(0,230,118,0.15)', color: 'var(--green)', label: 'Titular', icon: '⚾', next: 'lesionado', nextLabel: 'Lesionado' },
+      lesionado: { bg: 'rgba(255,152,0,0.15)', color: '#ff9800', label: 'Lesionado', icon: '🚑', next: 'suplente', nextLabel: 'Suplente' },
+      suplente: { bg: 'rgba(255,255,255,0.08)', color: 'var(--white-muted)', label: 'Suplente', icon: '📋', next: 'ausente', nextLabel: 'Ausente' },
+      ausente: { bg: 'rgba(244,67,54,0.15)', color: 'var(--red)', label: 'Ausente', icon: '❌', next: 'titular', nextLabel: 'Titular' }
     };
     const stStyle = STATUS_STYLES[st] || STATUS_STYLES.suplente;
-    const ALL_POSITIONS = ['Pitcher','Catcher','Primera Base','Segunda Base','Tercera Base','Shortstop','Left Field','Center Field','Right Field','Shortfield','Infielder','Outfielder','BA','BD'];
+    const ALL_POSITIONS = ['Pitcher', 'Catcher', 'Primera Base', 'Segunda Base', 'Tercera Base', 'Shortstop', 'Left Field', 'Center Field', 'Right Field', 'Shortfield', 'Infielder', 'Outfielder', 'BA', 'BD'];
     let h = `<div style="background:rgba(245,166,35,0.06);border-radius:12px;padding:14px;border:1px solid rgba(245,166,35,0.2);animation:slideUp 0.2s ease;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -2235,7 +2235,7 @@
         style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runA}">A</button>`;
       h += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
         style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
-        ${[0,1,2,3,4].map(v => `<option value="${v}" ${turn.rbi === v ? 'selected' : ''}>I:${v}</option>`).join('')}</select>`;
+        ${[0, 1, 2, 3, 4].map(v => `<option value="${v}" ${turn.rbi === v ? 'selected' : ''}>I:${v}</option>`).join('')}</select>`;
       h += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'direction',this.value)"
         style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
         <option value="" ${!turn.direction ? 'selected' : ''}>D:-</option>
@@ -2347,18 +2347,18 @@
 
   // Softball field position coordinates (% based, for a 400x320 container)
   const FIELD_POSITIONS = {
-    'Pitcher':      { x: 50, y: 58 },
-    'Catcher':      { x: 50, y: 88 },
+    'Pitcher': { x: 50, y: 58 },
+    'Catcher': { x: 50, y: 88 },
     'Primera Base': { x: 72, y: 56 },
     'Segunda Base': { x: 60, y: 40 },
     'Tercera Base': { x: 28, y: 56 },
-    'Shortstop':    { x: 40, y: 40 },
-    'Left Field':   { x: 15, y: 22 },
+    'Shortstop': { x: 40, y: 40 },
+    'Left Field': { x: 15, y: 22 },
     'Center Field': { x: 50, y: 10 },
-    'Right Field':  { x: 85, y: 22 },
-    'Shortfield':   { x: 50, y: 30 },
-    'BA':           { x: 92, y: 60 },
-    'BD':           { x: 92, y: 75 }
+    'Right Field': { x: 85, y: 22 },
+    'Shortfield': { x: 50, y: 30 },
+    'BA': { x: 92, y: 60 },
+    'BD': { x: 92, y: 75 }
     // Infielder, Outfielder are not fielded — shown in bench area
   };
 
@@ -2372,9 +2372,9 @@
   function posNum(pos) { return POSITION_NUMBERS[pos] || (pos ? pos : '-'); }
 
   function shortenPosition(pos) {
-    return (pos || '').replace('Primera Base','1B').replace('Segunda Base','2B').replace('Tercera Base','3B')
-      .replace('Left Field','LF').replace('Center Field','CF').replace('Right Field','RF')
-      .replace('Shortfield','SF').replace('Shortstop','SS').replace('Infielder','IF').replace('Outfielder','OF');
+    return (pos || '').replace('Primera Base', '1B').replace('Segunda Base', '2B').replace('Tercera Base', '3B')
+      .replace('Left Field', 'LF').replace('Center Field', 'CF').replace('Right Field', 'RF')
+      .replace('Shortfield', 'SF').replace('Shortstop', 'SS').replace('Infielder', 'IF').replace('Outfielder', 'OF');
   }
 
   function setLineupPosition(matchId, teamName, playerId, position) {
@@ -2448,7 +2448,7 @@
 
     // Helper to resolve status (backward compat with old starter boolean)
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
-    const starters = lineup.filter(e => ['titular','lesionado'].includes(getStatus(e)));
+    const starters = lineup.filter(e => ['titular', 'lesionado'].includes(getStatus(e)));
     const subs = lineup.filter(e => getStatus(e) === 'suplente');
     const lesionados = lineup.filter(e => getStatus(e) === 'lesionado');
     const ausentes = lineup.filter(e => getStatus(e) === 'ausente');
@@ -2618,7 +2618,7 @@
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
     // Build slots: keyed by the "base" order (lesionado's order = canonical slot)
     // Collect all titulares and lesionados, skip pure suplentes/ausentes
-    const active = lineup.filter(e => ['titular','lesionado'].includes(getStatus(e)));
+    const active = lineup.filter(e => ['titular', 'lesionado'].includes(getStatus(e)));
     if (active.length === 0) return '';
 
     // Group by slot: for a sub (replacesPlayer set), slot = their order (which was inherited)
@@ -2731,9 +2731,9 @@
       Object.keys(totals).forEach(k => totals[k] += s[k]);
       const isSelected = selectedLineupPlayerId === entry.playerId;
       const pStatus = entry.status || (entry.starter === false ? 'suplente' : 'titular');
-      const statusTag = pStatus === 'suplente'   ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>'
-        : pStatus === 'ausente'   ? ' <span style="font-size:0.6rem;color:var(--red);font-weight:400;">(AUS)</span>'
-        : pStatus === 'lesionado' ? ' <span style="font-size:0.6rem;color:#ff9800;font-weight:700;">🚑</span>' : '';
+      const statusTag = pStatus === 'suplente' ? ' <span style="font-size:0.6rem;color:var(--white-muted);font-weight:400;">(SUP)</span>'
+        : pStatus === 'ausente' ? ' <span style="font-size:0.6rem;color:var(--red);font-weight:400;">(AUS)</span>'
+          : pStatus === 'lesionado' ? ' <span style="font-size:0.6rem;color:#ff9800;font-weight:700;">🚑</span>' : '';
       const rowOpacity = pStatus === 'ausente' ? 'opacity:0.35;' : pStatus === 'suplente' ? 'opacity:0.5;' : pStatus === 'lesionado' ? 'opacity:0.6;' : '';
       html += `<tr data-pid="${entry.playerId}" style="border-bottom:1px solid rgba(255,255,255,0.03);cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.15);' : ''}${rowOpacity}"
         onclick="Admin.selectLineupPlayer('${entry.playerId}')">
@@ -3202,7 +3202,7 @@
   // Track last time current user viewed the messages of a match (sessionStorage, per-browser)
   function getLastSeenMessages(matchId) {
     try { return JSON.parse(sessionStorage.getItem('msg_seen') || '{}')[matchId] || 0; }
-    catch(e) { return 0; }
+    catch (e) { return 0; }
   }
 
   function markMessagesRead(matchId) {
@@ -3210,7 +3210,7 @@
       const s = JSON.parse(sessionStorage.getItem('msg_seen') || '{}');
       s[matchId] = Date.now();
       sessionStorage.setItem('msg_seen', JSON.stringify(s));
-    } catch(e) {}
+    } catch (e) { }
   }
 
   function getUnreadMsgCount(m) {
@@ -3392,9 +3392,9 @@
   }
 
   function startGame(matchId) {
-    if (!isAdmin() && !isSuperuser()) return;
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
+    if (!isAdmin() && !isSuperuser() && !(isDelegado() && (canEditTeam(m.local) || canEditTeam(m.visitante)))) return;
     m.status = 'live';
     m.startedAt = Date.now();
     logChange(matchId, 'game_start', 'Partido iniciado');
@@ -3403,9 +3403,9 @@
   }
 
   function endGame(matchId) {
-    if (!isAdmin() && !isSuperuser()) return;
     const m = partidos.find(x => x.id === matchId);
     if (!m) return;
+    if (!isAdmin() && !isSuperuser() && !(isDelegado() && (canEditTeam(m.local) || canEditTeam(m.visitante)))) return;
     if (!confirm('¿Finalizar el partido? Esta acción declarará el partido como terminado.')) return;
 
     // Build final summary before changing status (logChange guard passes while live)
