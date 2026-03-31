@@ -1847,7 +1847,11 @@
 
         // Bases diamond
         const bases = sc.bases || [false,false,false];
-        const bDot = (occ) => `<div style="width:16px;height:16px;transform:rotate(45deg);background:${occ?'var(--gold)':'transparent'};border:2px solid ${occ?'var(--gold)':'rgba(255,255,255,0.3)'};border-radius:2px;"></div>`;
+        const ar = sc.awaitingRunners || null;
+        const bDot = (occ, idx) => {
+          const click = (ar && idx !== undefined) ? `onclick="Admin.toggleBaseRunner('${m.id}',${idx})" style="cursor:pointer;transform:rotate(45deg);width:22px;height:22px;background:${occ?'var(--gold)':'rgba(245,166,35,0.15)'};border:2px solid ${occ?'var(--gold)':'var(--gold)'};border-radius:3px;transition:all 0.15s;"` : `style="transform:rotate(45deg);width:16px;height:16px;background:${occ?'var(--gold)':'transparent'};border:2px solid ${occ?'var(--gold)':'rgba(255,255,255,0.3)'};border-radius:2px;"`;
+          return `<div ${click}></div>`;
+        };
 
         const playBtn = (code, label, color) =>
           `<button onclick="Admin.recordPlay('${m.id}','${code}')"
@@ -1877,23 +1881,39 @@
           <!-- Batter + bases row -->
           <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;">
             <!-- Bases diamond -->
-            <div style="display:grid;grid-template-columns:repeat(3,20px);grid-template-rows:repeat(3,20px);gap:2px;flex-shrink:0;">
-              <div></div>${bDot(bases[1])}<div></div>
-              ${bDot(bases[2])}<div></div>${bDot(bases[0])}
-              <div></div><div style="width:16px;height:16px;background:rgba(255,255,255,0.15);border-radius:2px;transform:rotate(45deg);"></div><div></div>
+            <div style="display:grid;grid-template-columns:repeat(3,${ar?'24px':'20px'});grid-template-rows:repeat(3,${ar?'24px':'20px'});gap:2px;flex-shrink:0;">
+              <div></div>${bDot(bases[1],1)}<div></div>
+              ${bDot(bases[2],2)}<div></div>${bDot(bases[0],0)}
+              <div></div><div style="width:${ar?'22px':'16px'};height:${ar?'22px':'16px'};background:rgba(255,255,255,0.15);border-radius:2px;transform:rotate(45deg);"></div><div></div>
             </div>
-            <!-- Current batter info -->
+            <!-- Current batter info / awaiting label -->
             <div style="flex:1;min-width:120px;">
+              ${ar ? `<div style="font-size:0.7rem;color:var(--gold);font-weight:700;text-transform:uppercase;letter-spacing:1px;">Toca las bases para mover corredores</div>` : `
               <div style="font-size:0.65rem;color:var(--white-muted);text-transform:uppercase;letter-spacing:1px;">Al bate · ${battingNowName}</div>
               ${cbPlayer ? `
               <div style="font-weight:700;font-size:1rem;color:var(--white);margin-top:2px;">${cbPlayer.nombre}</div>
               <div style="font-size:0.72rem;color:var(--white-muted);">#${cbPlayer.dorsal||'-'} · Bat ${currentBatter.order} · ${cbStats}</div>
-              ` : '<div style="color:var(--white-muted);font-size:0.8rem;">Sin alineación</div>'}
+              ` : '<div style="color:var(--white-muted);font-size:0.8rem;">Sin alineación</div>'}`}
             </div>
           </div>
 
-          <!-- Play buttons -->
-          ${bpLineup.length ? `
+          <!-- Play buttons OR runner confirmation -->
+          ${ar ? `
+          <div style="background:rgba(245,166,35,0.06);border:1px solid rgba(245,166,35,0.35);border-radius:10px;padding:12px;">
+            <div style="font-size:0.65rem;color:var(--gold);margin-bottom:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+              Jugada: ${ar.code === 'H' ? 'Hit' : ar.code === '2' ? '2B' : ar.code === '3' ? '3B' : 'Error'} — Confirma posiciones finales
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+              <span style="font-size:0.75rem;color:var(--white-muted);">Carreras anotadas:</span>
+              <button onclick="Admin.adjustPendingRuns('${m.id}',-1)" style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);background:transparent;color:var(--white);font-size:1.1rem;cursor:pointer;line-height:1;">−</button>
+              <span style="font-size:1.4rem;font-weight:700;color:var(--gold);min-width:1.5ch;text-align:center;">${ar.runs || 0}</span>
+              <button onclick="Admin.adjustPendingRuns('${m.id}',1)" style="width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,0.25);background:transparent;color:var(--white);font-size:1.1rem;cursor:pointer;line-height:1;">+</button>
+            </div>
+            <button class="btn btn-primary" onclick="Admin.confirmRunners('${m.id}')" style="width:100%;font-weight:700;padding:10px;font-size:0.9rem;">
+              ✓ Confirmar jugada
+            </button>
+          </div>
+          ` : bpLineup.length ? `
           <div style="display:flex;flex-wrap:wrap;gap:6px;">
             ${playBtn('O','OUT','rgba(255,255,255,0.4)')}
             ${playBtn('K','K','rgba(255,255,255,0.4)')}
@@ -2015,6 +2035,7 @@
     const sc = m.scorecard;
     if (!sc) return;
     sc.bases = [false, false, false];
+    delete sc.awaitingRunners;
     if (sc.halfInning === 'top') {
       sc.halfInning = 'bottom';
       sc.outs = 0;
@@ -2138,19 +2159,65 @@
     const batter = lineup[sc.batterPos[side] % lineup.length];
     const inn = sc.currentInning || 0;
 
-    const { bases, runs, rbi, isOut } = applyBaseRules(sc.bases, code);
-    sc.bases = bases;
-
-    // Update inning score (Ensure numeric addition)
-    const currentScore = sc[side][inn] || 0;
-    if (runs > 0) {
-      sc[side][inn] = Number(currentScore) + runs;
-    } else if (currentScore === null && !isOut) {
-      sc[side][inn] = 0;
+    function recordTurn(result, rbi, isRun) {
+      if (!batter) return;
+      const teamName = side === 'local' ? m.local : m.visitante;
+      const entry = (m.lineup[teamName] || []).find(e => e.playerId === batter.playerId);
+      if (!entry) return;
+      if (!entry.turns) entry.turns = [];
+      let ti = entry.turns.findIndex(t => !t.result);
+      if (ti === -1) { entry.turns.push({ result: '', sb: false, run: false, rbi: 0, direction: '' }); ti = entry.turns.length - 1; }
+      entry.turns[ti].result = result;
+      entry.turns[ti].rbi = rbi || 0;
+      if (isRun) entry.turns[ti].run = true;
     }
 
-    // Update Team Total Stats (Hits/Errors)
-    if (['H', '2', '3', '4'].includes(code)) {
+    // OUT / K
+    if (code === 'O' || code === 'K') {
+      recordTurn(code, 0, false);
+      sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      sc.outs = (sc.outs || 0) + 1;
+      autoSave(); renderView();
+      if (sc.outs >= 3) setTimeout(() => advanceHalf(matchId), 700);
+      return;
+    }
+
+    // HR — auto: everyone scores
+    if (code === '4') {
+      const runs = sc.bases.filter(Boolean).length + 1;
+      sc[side][inn] = Number(sc[side][inn] || 0) + runs;
+      sc.bases = [false, false, false];
+      if (!sc.hits) sc.hits = { local: 0, visitante: 0 };
+      sc.hits[side] = (Number(sc.hits[side]) || 0) + 1;
+      m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      recordTurn('4', runs, true);
+      sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      autoSave(); renderView();
+      return;
+    }
+
+    // BB — auto: forced advancement only
+    if (code === 'BB') {
+      const { bases, runs, rbi } = applyBaseRules(sc.bases, 'BB');
+      sc.bases = bases;
+      if (runs > 0) {
+        sc[side][inn] = Number(sc[side][inn] || 0) + runs;
+        m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+        m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      } else if (sc[side][inn] === null || sc[side][inn] === undefined) {
+        sc[side][inn] = 0;
+      }
+      recordTurn('BB', rbi, false);
+      sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      autoSave(); renderView();
+      return;
+    }
+
+    // H / 2 / 3 / E — manual runner placement
+    const battersBase = code === '2' ? 1 : code === '3' ? 2 : 0;
+
+    if (['H', '2', '3'].includes(code)) {
       if (!sc.hits) sc.hits = { local: 0, visitante: 0 };
       sc.hits[side] = (Number(sc.hits[side]) || 0) + 1;
     }
@@ -2159,32 +2226,62 @@
       if (!sc.errors) sc.errors = { local: 0, visitante: 0 };
       sc.errors[defendingSide] = (Number(sc.errors[defendingSide]) || 0) + 1;
     }
-    m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
-    m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
 
-    // Record on batter's lineup entry
-    if (batter) {
-      const teamName = side === 'local' ? m.local : m.visitante;
-      const entry = (m.lineup[teamName] || []).find(e => e.playerId === batter.playerId);
-      if (entry) {
-        if (!entry.turns) entry.turns = [];
-        let ti = entry.turns.findIndex(t => !t.result);
-        if (ti === -1) { entry.turns.push({ result: '', sb: false, run: false, rbi: 0, direction: '' }); ti = entry.turns.length - 1; }
-        entry.turns[ti].result = code;
-        entry.turns[ti].rbi = rbi;
-        if (code === '4') entry.turns[ti].run = true; // HR → batter scored
-      }
-    }
+    // Mark inning as started
+    if (sc[side][inn] === null || sc[side][inn] === undefined) sc[side][inn] = 0;
 
-    // Always advance batter position (even on outs)
+    // Record batter turn (RBI updated on confirm)
+    recordTurn(code, 0, false);
+
+    // Place batter on their base, leave other runners in place
+    sc.bases[battersBase] = true;
+
+    // Store pending confirmation
+    sc.awaitingRunners = { code, runs: 0, batterPlayerId: batter ? batter.playerId : null, side, inn };
+
     sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
-    if (isOut) {
-      sc.outs = (sc.outs || 0) + 1;
-      autoSave(); renderView();
-      if (sc.outs >= 3) setTimeout(() => advanceHalf(matchId), 700);
-    } else {
-      autoSave(); renderView();
+    renderView(); // no autoSave until confirmed
+  }
+
+  function toggleBaseRunner(matchId, baseIdx) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.scorecard || !m.scorecard.awaitingRunners) return;
+    m.scorecard.bases[baseIdx] = !m.scorecard.bases[baseIdx];
+    renderView();
+  }
+
+  function adjustPendingRuns(matchId, delta) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.scorecard || !m.scorecard.awaitingRunners) return;
+    const ar = m.scorecard.awaitingRunners;
+    ar.runs = Math.max(0, (ar.runs || 0) + delta);
+    renderView();
+  }
+
+  function confirmRunners(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.scorecard || !m.scorecard.awaitingRunners) return;
+    const sc = m.scorecard;
+    const ar = sc.awaitingRunners;
+    const runs = ar.runs || 0;
+
+    if (runs > 0) {
+      sc[ar.side][ar.inn] = Number(sc[ar.side][ar.inn] || 0) + runs;
+      // Update RBI on batter's last turn
+      if (ar.batterPlayerId) {
+        const teamName = ar.side === 'local' ? m.local : m.visitante;
+        const entry = (m.lineup[teamName] || []).find(e => e.playerId === ar.batterPlayerId);
+        if (entry && entry.turns) {
+          const last = [...entry.turns].reverse().find(t => ['H', '2', '3', 'E'].includes(t.result));
+          if (last) last.rbi = runs;
+        }
+      }
+      m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
     }
+
+    delete sc.awaitingRunners;
+    autoSave(); renderView();
   }
   // ────────────────────────────────────────────────────────────
 
@@ -3208,10 +3305,10 @@
       const isBatting = entry.playerId === currentBatterPid;
       const isOnDeck = entry.playerId === nextBatterPid;
       
-      const dragAttrs = `draggable="true" 
-        ondragstart="Admin.handleDragStart(event, '${teamName}', '${entry.playerId}')" 
-        ondragover="Admin.handleDragOver(event)" 
-        ondrop="Admin.handleDrop(event, '${m.id}', '${teamName}', '${entry.playerId}')"`;
+      const dragAttrs = `draggable="true"
+        ondragstart="Admin.handleDragStart(event, '${teamName}', '${entry.playerId}')"
+        ondragover="Admin.handleDragOver(event)"
+        ondrop="Admin.handleDrop(event, '${match.id}', '${teamName}', '${entry.playerId}')"`;
 
       if (st === 'lesionado') {
         const subEntry = entry.replacedBy ? lineup.find(e => e.playerId === entry.replacedBy) : null;
@@ -3228,10 +3325,10 @@
           const isSubSel = selectedLineupPlayerId === subEntry.playerId;
           const isSubBat = subEntry.playerId === currentBatterPid;
           const isSubOnDeck = subEntry.playerId === nextBatterPid;
-          const subDrag = `draggable="true" 
-            ondragstart="Admin.handleDragStart(event, '${teamName}', '${subEntry.playerId}')" 
-            ondragover="Admin.handleDragOver(event)" 
-            ondrop="Admin.handleDrop(event, '${m.id}', '${teamName}', '${subEntry.playerId}')"`;
+          const subDrag = `draggable="true"
+            ondragstart="Admin.handleDragStart(event, '${teamName}', '${subEntry.playerId}')"
+            ondragover="Admin.handleDragOver(event)"
+            ondrop="Admin.handleDrop(event, '${match.id}', '${teamName}', '${subEntry.playerId}')"`;
           rows += `<tr ${subDrag} onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:grab;${isSubBat ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isSubOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
             <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${displayOrder}</td>
             <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${subP.dorsal || '-'}</td>
@@ -4242,6 +4339,9 @@
     editInning,
     editStat,
     recordPlay,
+    toggleBaseRunner,
+    adjustPendingRuns,
+    confirmRunners,
     toggleOut,
     advanceHalf,
     setBattingFirst,
