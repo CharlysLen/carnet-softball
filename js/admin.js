@@ -291,7 +291,9 @@
   }
 
   function renderEmblem(team, size) {
-    if (team.imagen) return `<img src="${team.imagen}" style="width:${size};height:${size};object-fit:contain;border-radius:12px;">`;
+    const img = team.imagen;
+    const validImg = img && typeof img === 'string' && (img.startsWith('http://') || img.startsWith('https://') || img.startsWith('data:image/') || img.startsWith('/'));
+    if (validImg) return `<img src="${img}" style="width:${size};height:${size};object-fit:contain;border-radius:12px;">`;
     return `<span style="font-size:${size};line-height:1">${team.escudo || '🥎'}</span>`;
   }
 
@@ -1593,14 +1595,14 @@
 
         <!-- Sub-tabs -->
         <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
-          ${['resumen', 'local', 'visitante', 'bitacora'].map(tab => {
+          ${['resumen', 'scorecard', 'local', 'visitante', 'bitacora'].map(tab => {
           const pendingLogs = (isAdmin() || isSuperuser()) ? (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length : 0;
           const unreadMsgs = getUnreadMsgCount(m);
           const totalBadge = pendingLogs + unreadMsgs;
           const bitacoraLabel = totalBadge > 0
             ? `📝 Bitácora <span style="background:${unreadMsgs > 0 ? '#e53935' : 'var(--gold)'};color:#fff;border-radius:10px;padding:1px 6px;font-size:0.65rem;font-weight:700;">${totalBadge}</span>`
             : '📝 Bitácora';
-          const labels = { resumen: '📊 Resumen', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
+          const labels = { resumen: '📊 Resumen', scorecard: '🏟 Marcador', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
           const active = lineupSubView === tab;
           return `<button onclick="Admin.setLineupSubView('${tab}')"
               style="padding:10px 16px;font-size:0.8rem;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
@@ -1620,6 +1622,10 @@
               <h3 style="color:var(--white-muted);font-size:0.9rem;text-align:center;text-transform:uppercase;letter-spacing:1px;margin-bottom:15px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;">${m.visitante}</h3>
               ${renderTeamList(m.visitante)}
             </div>
+          </div>
+        ` : lineupSubView === 'scorecard' ? `
+          <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
+            ${renderScorecard(m)}
           </div>
         ` : lineupSubView === 'local' ? `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
@@ -1686,6 +1692,235 @@
         
       </div>`;
     c.innerHTML = html;
+  }
+
+  // ── SCORECARD ──
+  function initScorecard(m) {
+    if (!m.scorecard) {
+      m.scorecard = {
+        local: Array(7).fill(null),
+        visitante: Array(7).fill(null),
+        hits: { local: 0, visitante: 0 },
+        errors: { local: 0, visitante: 0 },
+        outs: 0,
+        currentInning: 0,
+        halfInning: 'top' // top = visitante bats, bottom = local bats
+      };
+    }
+    return m.scorecard;
+  }
+
+  function renderScorecard(m) {
+    const canEdit = canEditMatch(m);
+    const sc = m.scorecard || {
+      local: Array(7).fill(null), visitante: Array(7).fill(null),
+      hits: { local: 0, visitante: 0 }, errors: { local: 0, visitante: 0 },
+      outs: 0, currentInning: 0, halfInning: 'top'
+    };
+    const localTeam = equipos.find(e => e.nombre === m.local);
+    const visitTeam = equipos.find(e => e.nombre === m.visitante);
+    const numInnings = sc.local.length;
+    const totalLocal = sc.local.reduce((s, r) => s + (r || 0), 0);
+    const totalVisit = sc.visitante.reduce((s, r) => s + (r || 0), 0);
+    const outs = sc.outs || 0;
+    const currentInning = sc.currentInning || 0;
+    const half = sc.halfInning || 'top';
+
+    function cell(team, idx, runs) {
+      const isActive = m.status === 'live' && idx === currentInning &&
+        ((team === 'visitante' && half === 'top') || (team === 'local' && half === 'bottom'));
+      const display = runs === null ? (isActive ? '·' : '') : runs;
+      const bg = isActive ? 'background:rgba(245,166,35,0.12);' : '';
+      const clr = isActive ? 'color:var(--gold);' : runs === 0 ? 'color:rgba(255,255,255,0.3);' : '';
+      const click = canEdit ? `onclick="Admin.editInning('${m.id}','${team}',${idx})"` : '';
+      return `<td class="sc-cell" ${click} style="${bg}${clr}${canEdit ? 'cursor:pointer;' : ''}">${display === 0 ? '0' : (display ?? '')}</td>`;
+    }
+
+    const linesLocal = players.filter(p => p.equipo === m.local && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0));
+    const linesVisit = players.filter(p => p.equipo === m.visitante && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0));
+
+    function battingTable(list) {
+      if (!list.length) return `<div style="color:var(--white-muted);font-size:0.8rem;padding:8px 0;">Sin stats registradas</div>`;
+      return `<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+        <thead><tr style="color:var(--white-muted);border-bottom:1px solid rgba(255,255,255,0.08);">
+          <th style="padding:5px 6px;text-align:left;">#</th>
+          <th style="padding:5px 6px;text-align:left;">Jugador</th>
+          <th style="padding:5px 6px;text-align:center;">H-AB</th>
+          <th style="padding:5px 6px;text-align:center;color:var(--green);">RBI</th>
+          <th style="padding:5px 6px;text-align:center;color:var(--gold);">HR</th>
+          <th style="padding:5px 6px;text-align:center;">R</th>
+        </tr></thead>
+        <tbody>${list.map(p => {
+          const s = m.playerStats[p.id];
+          return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+            <td style="padding:5px 6px;opacity:0.6;">${p.dorsal}</td>
+            <td style="padding:5px 6px;">${p.nombre}</td>
+            <td style="padding:5px 6px;text-align:center;font-family:monospace;">${s.h || 0}-${s.ab || 0}</td>
+            <td style="padding:5px 6px;text-align:center;color:var(--green);font-weight:700;">${s.rbi || 0}</td>
+            <td style="padding:5px 6px;text-align:center;color:var(--gold);font-weight:700;">${s.hr || 0}</td>
+            <td style="padding:5px 6px;text-align:center;">${s.r || 0}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+    }
+
+    return `
+      ${m.status === 'live' && canEdit ? `
+      <div class="sc-live-controls">
+        <div class="sc-inning-block">
+          <div class="sc-ctrl-label">Entrada</div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+            <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',-1)" ${currentInning === 0 ? 'disabled' : ''}>◀</button>
+            <span style="font-family:var(--font-display);font-size:2rem;color:var(--gold);min-width:2ch;text-align:center;">${currentInning + 1}</span>
+            <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',1)">▶</button>
+          </div>
+          <button onclick="Admin.toggleHalf('${m.id}')" class="sc-half-btn">
+            ${half === 'top' ? '▲ Alta · ' + m.visitante : '▼ Baja · ' + m.local}
+          </button>
+        </div>
+
+        <div class="sc-outs-block">
+          <div class="sc-ctrl-label">Outs</div>
+          <div style="display:flex;gap:10px;margin-top:6px;">
+            ${[1,2,3].map(i => `
+            <div onclick="Admin.toggleOut('${m.id}',${i})" class="sc-out-dot ${outs >= i ? 'sc-out-filled' : ''}"></div>`).join('')}
+          </div>
+          <div style="font-size:0.72rem;margin-top:6px;color:${outs === 3 ? 'var(--red)' : 'var(--white-muted)'};">
+            ${outs === 3 ? '🔄 3 outs — cambio de turno' : outs + ' / 3'}
+          </div>
+        </div>
+      </div>
+      ` : ''}
+
+      <div class="sc-table-wrap">
+        <table class="sc-table">
+          <thead>
+            <tr>
+              <th class="sc-th-team"></th>
+              ${Array.from({length: numInnings}, (_, i) => `<th class="sc-th-inn">${i + 1}</th>`).join('')}
+              <th class="sc-th-total sc-th-r">R</th>
+              <th class="sc-th-total">H</th>
+              <th class="sc-th-total">E</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="sc-td-team">
+                <span class="sc-team-emblem">${localTeam ? renderEmblem(localTeam, '1.1rem') : '🥎'}</span>
+                <span class="sc-team-label">${m.local}</span>
+              </td>
+              ${sc.local.map((r, i) => cell('local', i, r)).join('')}
+              <td class="sc-td-total sc-td-r" style="color:${totalLocal >= totalVisit && totalLocal > 0 ? 'var(--gold)' : 'var(--white)'};">${totalLocal}</td>
+              <td class="sc-td-total sc-td-he" ${canEdit ? `onclick="Admin.editStat('${m.id}','local','hits')" style="cursor:pointer;"` : ''}>${sc.hits?.local ?? 0}</td>
+              <td class="sc-td-total sc-td-he" ${canEdit ? `onclick="Admin.editStat('${m.id}','local','errors')" style="cursor:pointer;"` : ''}>${sc.errors?.local ?? 0}</td>
+            </tr>
+            <tr>
+              <td class="sc-td-team">
+                <span class="sc-team-emblem">${visitTeam ? renderEmblem(visitTeam, '1.1rem') : '🥎'}</span>
+                <span class="sc-team-label">${m.visitante}</span>
+              </td>
+              ${sc.visitante.map((r, i) => cell('visitante', i, r)).join('')}
+              <td class="sc-td-total sc-td-r" style="color:${totalVisit > totalLocal ? 'var(--gold)' : 'var(--white)'};">${totalVisit}</td>
+              <td class="sc-td-total sc-td-he" ${canEdit ? `onclick="Admin.editStat('${m.id}','visitante','hits')" style="cursor:pointer;"` : ''}>${sc.hits?.visitante ?? 0}</td>
+              <td class="sc-td-total sc-td-he" ${canEdit ? `onclick="Admin.editStat('${m.id}','visitante','errors')" style="cursor:pointer;"` : ''}>${sc.errors?.visitante ?? 0}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      ${canEdit ? `
+      <div style="margin-top:10px;">
+        <button class="btn btn-sm btn-secondary" onclick="Admin.addExtraInning('${m.id}')">＋ Entrada extra</button>
+      </div>` : ''}
+
+      <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;">
+        <div style="font-family:var(--font-display);color:var(--gold);font-size:0.8rem;letter-spacing:1px;margin-bottom:14px;text-transform:uppercase;">📊 Estadísticas individuales</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:0.78rem;font-weight:700;margin-bottom:10px;color:var(--white-soft);">${m.local}</div>
+            ${battingTable(linesLocal)}
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border-radius:10px;padding:12px;border:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:0.78rem;font-weight:700;margin-bottom:10px;color:var(--white-soft);">${m.visitante}</div>
+            ${battingTable(linesVisit)}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function editInning(matchId, team, idx) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    const cur = sc[team][idx];
+    const val = prompt(`Carreras — Entrada ${idx + 1} · ${team === 'local' ? m.local : m.visitante}:`, cur !== null ? cur : '');
+    if (val === null) return;
+    const n = parseInt(val, 10);
+    if (isNaN(n) || n < 0) { alert('Ingresa un número válido (0 o más)'); return; }
+    sc[team][idx] = n;
+    m.localScore = sc.local.reduce((s, r) => s + (r || 0), 0);
+    m.visitScore = sc.visitante.reduce((s, r) => s + (r || 0), 0);
+    autoSave();
+    renderView();
+  }
+
+  function editStat(matchId, team, stat) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    const label = stat === 'hits' ? 'Hits' : 'Errores';
+    const val = prompt(`${label} — ${team === 'local' ? m.local : m.visitante}:`, sc[stat]?.[team] ?? 0);
+    if (val === null) return;
+    const n = parseInt(val, 10);
+    if (isNaN(n) || n < 0) return;
+    if (!sc[stat]) sc[stat] = { local: 0, visitante: 0 };
+    sc[stat][team] = n;
+    autoSave();
+    renderView();
+  }
+
+  function toggleOut(matchId, outNum) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    sc.outs = sc.outs === outNum ? outNum - 1 : outNum;
+    autoSave();
+    renderView();
+  }
+
+  function toggleHalf(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    sc.halfInning = sc.halfInning === 'top' ? 'bottom' : 'top';
+    sc.outs = 0;
+    autoSave();
+    renderView();
+  }
+
+  function changeInning(matchId, delta) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    sc.currentInning = Math.max(0, Math.min(sc.local.length - 1, (sc.currentInning || 0) + delta));
+    sc.halfInning = 'top';
+    sc.outs = 0;
+    autoSave();
+    renderView();
+  }
+
+  function addExtraInning(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    sc.local.push(null);
+    sc.visitante.push(null);
+    sc.currentInning = sc.local.length - 1;
+    sc.halfInning = 'top';
+    sc.outs = 0;
+    autoSave();
+    renderView();
   }
 
   function viewMatch(id, subView) {
@@ -3613,6 +3848,12 @@
     // Lineup / Scorecard
     enviarAlineacion,
     setLineupSubView,
+    editInning,
+    editStat,
+    toggleOut,
+    toggleHalf,
+    changeInning,
+    addExtraInning,
     initLineupForMatch,
     setTurnResult,
     setDefenseStat,
