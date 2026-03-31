@@ -1713,10 +1713,16 @@
 
   function renderScorecard(m) {
     const canEdit = canEditMatch(m);
-    const sc = m.scorecard || {
-      local: Array(7).fill(null), visitante: Array(7).fill(null),
-      hits: { local: 0, visitante: 0 }, errors: { local: 0, visitante: 0 },
-      outs: 0, currentInning: 0, halfInning: 'top', battingFirst: null
+    const raw = m.scorecard || {};
+    const sc = {
+      local: Array.isArray(raw.local) ? raw.local : Array(7).fill(null),
+      visitante: Array.isArray(raw.visitante) ? raw.visitante : Array(7).fill(null),
+      hits: raw.hits || { local: 0, visitante: 0 },
+      errors: raw.errors || { local: 0, visitante: 0 },
+      outs: raw.outs || 0,
+      currentInning: raw.currentInning || 0,
+      halfInning: raw.halfInning || 'top',
+      battingFirst: raw.battingFirst || null
     };
     const localTeam = equipos.find(e => e.nombre === m.local);
     const visitTeam = equipos.find(e => e.nombre === m.visitante);
