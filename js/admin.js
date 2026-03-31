@@ -1793,6 +1793,7 @@
           <th style="padding:5px 6px;text-align:left;">#</th>
           <th style="padding:5px 6px;text-align:left;">Jugador</th>
           <th style="padding:5px 6px;text-align:center;">H-AB</th>
+          <th style="padding:5px 6px;text-align:center;color:var(--blue-check);">BB</th>
           <th style="padding:5px 6px;text-align:center;color:var(--green);">RBI</th>
           <th style="padding:5px 6px;text-align:center;color:var(--gold);">HR</th>
           <th style="padding:5px 6px;text-align:center;">R</th>
@@ -1809,6 +1810,7 @@
             <td style="padding:5px 6px;opacity:0.6;">${p.dorsal}</td>
             <td style="padding:5px 6px;">${p.nombre}</td>
             <td style="padding:5px 6px;text-align:center;font-family:monospace;">${s.h || 0}-${s.ab || 0}</td>
+            <td style="padding:5px 6px;text-align:center;color:var(--blue-check);">${s.bb || 0}</td>
             <td ${clickRBI} style="padding:5px 6px;text-align:center;color:var(--green);font-weight:700;">${s.rbi || 0}</td>
             <td style="padding:5px 6px;text-align:center;color:var(--gold);font-weight:700;">${s.hr || 0}</td>
             <td ${clickR} style="padding:5px 6px;text-align:center;background:${s.r > 0 ? 'rgba(76,175,80,0.1)' : 'transparent'};border-radius:4px;">${s.r || 0}</td>
@@ -2637,6 +2639,7 @@
         p.stats.hr += (parseInt(s.hr, 10) || 0);
         p.stats.rbi += (parseInt(s.rbi, 10) || 0);
         p.stats.r += (parseInt(s.r, 10) || 0);
+        p.stats.bb += (parseInt(s.bb, 10) || 0);
       }
       // Aggregate extended stats from lineup data
       if (m.lineup) {
@@ -2662,14 +2665,14 @@
   }
 
   // ── LINEUP / SCORECARD ──
-  const TURN_RESULTS = ['H', '2', '3', '4', 'B', 'E', 'K', 'O'];
-  const TURN_RESULT_LABELS = { H: 'H', '2': '2B', '3': '3B', '4': 'HR', B: 'BB', E: 'E', K: 'K', O: 'OUT' };
-  const TURN_RESULT_COLORS = { H: '#4caf50', '2': '#8bc34a', '3': '#ff9800', '4': '#f44336', B: '#2196f3', E: '#9c27b0', K: '#795548', O: '#607d8b' };
+  const TURN_RESULTS = ['H', '2', '3', '4', 'BB', 'E', 'K', 'O'];
+  const TURN_RESULT_LABELS = { H: 'H', '2': '2B', '3': '3B', '4': 'HR', BB: 'BB', E: 'E', K: 'K', O: 'OUT' };
+  const TURN_RESULT_COLORS = { H: '#4caf50', '2': '#8bc34a', '3': '#ff9800', '4': '#f44336', BB: '#2196f3', E: '#9c27b0', K: '#795548', O: '#607d8b' };
 
   function calcLineupSummary(entry) {
     const turns = (entry.turns || []).filter(t => t.result);
     const pa = turns.length;
-    const bb = turns.filter(t => t.result === 'B').length;
+    const bb = turns.filter(t => t.result === 'BB' || t.result === 'B').length;
     const ab = pa - bb;
     const h = turns.filter(t => ['H', '2', '3', '4'].includes(t.result)).length;
     const doubles = turns.filter(t => t.result === '2').length;
@@ -2690,7 +2693,7 @@
     for (const entries of Object.values(match.lineup)) {
       for (const entry of entries) {
         const s = calcLineupSummary(entry);
-        match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, hr: s.hr, rbi: s.rbi, r: s.r };
+        match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, hr: s.hr, rbi: s.rbi, r: s.r, bb: s.bb };
       }
     }
   }
