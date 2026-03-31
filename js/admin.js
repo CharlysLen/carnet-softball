@@ -4,7 +4,7 @@
    CSV import, auto-save to localStorage
    ============================================ */
 
-window.Admin = (function () {
+(function () {
   'use strict';
 
   let players = [];
@@ -4118,6 +4118,65 @@ window.Admin = (function () {
     alert(`Alineación de ${teamName} enviada al partido${m.jornada ? ' — Jornada ' + m.jornada : ''} (${m.fecha})`);
   }
 
+  // --- Lineup Presets (Max 3 per team) ---
+  function saveLineupPreset(matchId, teamName, slot) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const team = equipos.find(e => e.nombre === teamName);
+    if (!team) return;
+    if (!team.presets) team.presets = {};
+    team.presets[slot] = m.lineup[teamName].map(e => ({
+      playerId: e.playerId,
+      order: e.order,
+      position: e.position,
+      status: e.status || 'titular'
+    }));
+    autoSave();
+    alert('Alineación guardada en el Perfil ' + slot);
+    renderView();
+  }
+
+  function loadLineupPreset(matchId, teamName, slot) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup) return;
+    const team = equipos.find(e => e.nombre === teamName);
+    if (!team || !team.presets || !team.presets[slot]) {
+      alert('No hay ninguna alineación guardada en el Perfil ' + slot);
+      return;
+    }
+    if (!confirm('¿Cargar el Perfil ' + slot + '? Se reemplazará la alineación actual.')) return;
+    m.lineup[teamName] = team.presets[slot].map(p => ({
+      ...p,
+      turns: [],
+      defense: { outs: 0, errors: 0, assists: 0 }
+    }));
+    autoSave();
+    renderView();
+  }
+
+  // ── COLLAPSIBLE HEADER ON SCROLL ──
+  function initScrollHeader() {
+    const header = document.querySelector('.admin-header');
+    if (!header) return;
+    let lastScrollY = window.scrollY;
+    let ticking = false;
+    window.addEventListener('scroll', function () {
+      if (!ticking) {
+        window.requestAnimationFrame(function () {
+          const currentY = window.scrollY;
+          if (header) {
+            if (currentY <= 10) header.classList.remove('header-hidden');
+            else if (currentY > lastScrollY + 8) header.classList.add('header-hidden');
+            else if (currentY < lastScrollY - 8) header.classList.remove('header-hidden');
+          }
+          lastScrollY = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    });
+  }
+
   const AdminApi = {
     init,
     renderView,
@@ -4134,23 +4193,17 @@ window.Admin = (function () {
     selectTeam,
     backToTeams,
     saveMatchLog,
-
-    // Actions called from HTML
     toggleEstado,
     toggleVerificado,
     aprobarJugador,
     rechazarJugador,
     deletePlayer,
     viewCard,
-
-    // Edit functions
     editTeam,
     deleteTeam,
     editPlayer,
     savePlayer,
     saveTeam,
-
-    // Handlers
     handlePhotoUpload: handlePlayerPhotoChange,
     handleTeamImageUpload: handleTeamImageChange,
     handleCSVFile,
@@ -4158,23 +4211,16 @@ window.Admin = (function () {
     handleDragOver,
     handleDrop,
     closeModal,
-    saveMatchLog,
-
-    // Exports & Utilities
     downloadCSVTemplate,
     exportJSON,
     exportTeamCSV,
     resetData,
     generateDemoData,
-
-    // Match stats CSV
     downloadMatchTemplate,
     openMatchCSV,
     handleMatchCSVFile,
     confirmMatchCSV,
     recalcAllPlayerStats,
-
-    // User management
     applyPermissions,
     logout,
     renderUsers,
@@ -4182,30 +4228,17 @@ window.Admin = (function () {
     editUser,
     saveUser,
     deleteUser,
-
-    // Player administration
     renderPlayerPhotos,
-    handlePlayerPhotoChange,
-    handleTeamImageChange,
-    handleCSVFile,
-
-    // Match CRUD
     openCreateMatch,
     saveNewMatch,
     deleteMatch,
     startGame,
     endGame,
-
-    // Game log
     acknowledgeLog,
     acknowledgeAllLogs,
-
-    // Messaging
     sendMatchMessage,
     replyToMessage,
     requestContactSuper,
-
-    // Lineup / Scorecard
     enviarAlineacion,
     setLineupSubView,
     editInning,
@@ -4220,82 +4253,35 @@ window.Admin = (function () {
     initLineupForMatch,
     setTurnResult,
     setDefenseStat,
-    cycleStatus, setLineupPosition, setPlayerOrder, makeSubstitution,
-    handleDragStart, handleDragOver, handleDrop,
-    saveLineupPreset, loadLineupPreset,
-    renderDashboard, renderPlayerList, renderMatchList, renderView, selectLineupPlayer, updateMatchData, archiveMatch
+    cycleStatus,
+    setLineupPosition,
+    setPlayerOrder,
+    makeSubstitution,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
+    saveLineupPreset,
+    loadLineupPreset,
+    renderDashboard,
+    renderPlayerList,
+    renderMatchList,
+    renderView,
+    selectLineupPlayer,
+    updateMatchData,
+    archiveMatch
   };
-
-  // --- NEW: Lineup Presets (Max 3 per team) ---
-  function saveLineupPreset(matchId, teamName, slot) {
-    const m = partidos.find(x => x.id === matchId);
-    if (!m || !m.lineup || !m.lineup[teamName]) return;
-    const team = equipos.find(e => e.nombre === teamName);
-    if (!team) return;
-    if (!team.presets) team.presets = {};
-    
-    // Clean lineup for storage (only essential data)
-    team.presets[slot] = m.lineup[teamName].map(e => ({
-      playerId: e.playerId,
-      order: e.order,
-      position: e.position,
-      status: e.status || 'titular'
-    }));
-    
-    autoSave();
-    alert(`Alineación guardada en el Perfil ${slot} para ${teamName}`);
-    renderView();
-  }
-
-  function loadLineupPreset(matchId, teamName, slot) {
-    const m = partidos.find(x => x.id === matchId);
-    if (!m || !m.lineup) return;
-    const team = equipos.find(e => e.nombre === teamName);
-    if (!team || !team.presets || !team.presets[slot]) {
-      alert(`No hay ninguna alineación guardada en el Perfil ${slot}`);
-      return;
-    }
-    
-    if (!confirm(`¿Cargar el Perfil ${slot}? Se reemplazará la alineación actual.`)) return;
-    
-    m.lineup[teamName] = team.presets[slot].map(p => ({
-      ...p,
-      turns: [],
-      defense: { outs: 0, errors: 0, assists: 0 }
-    }));
-    
-    autoSave();
-    renderView();
-  }
 
   window.Admin = AdminApi;
 
-  // ── COLLAPSIBLE HEADER ON SCROLL ──
-  function initScrollHeader() {
-    const header = document.querySelector('.admin-header');
-    if (!header) return;
-    let lastScrollY = window.scrollY;
-    let ticking = false;
-    window.addEventListener('scroll', function () {
-      if (!ticking) {
-        window.requestAnimationFrame(function () {
-          const currentY = window.scrollY;
-          if (currentY <= 10) {
-            header.classList.remove('header-hidden');
-          } else if (currentY > lastScrollY + 8) {
-            header.classList.add('header-hidden');
-          } else if (currentY < lastScrollY - 8) {
-            header.classList.remove('header-hidden');
-          }
-          lastScrollY = currentY;
-          ticking = false;
-        });
-        ticking = true;
-      }
-    });
+  function init() {
+    bindEvents();
+    loadData();
+    initScrollHeader();
   }
 
-  function init() { bindEvents(); loadData(); initScrollHeader(); }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
