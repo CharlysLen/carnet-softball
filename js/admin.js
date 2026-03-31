@@ -2273,6 +2273,7 @@
     sc.awaitingRunners = { code, runs: rb.runs, rbi: rb.rbi, batterPlayerId: batter ? batter.playerId : null, side, inn };
 
     sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+    syncLineupToPlayerStats(m);
     renderView(); // no autoSave until confirmed
   }
 
