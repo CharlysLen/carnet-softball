@@ -2069,6 +2069,46 @@
     }
     autoSave();
     renderView();
+    checkGameOver(matchId);
+  }
+
+  function checkGameOver(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || m.status !== 'live' || !m.scorecard) return;
+    const sc = m.scorecard;
+    const standardInnings = Array.isArray(sc.local) ? sc.local.length : 7;
+    const current = (sc.currentInning || 0) + 1;
+    const isLastInning = current >= standardInnings;
+    
+    const localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+    const visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
+    
+    const homeTeamSide = sc.battingFirst === 'local' ? 'visitante' : 'local'; // Home bats last
+    const visitorTeamSide = sc.battingFirst;
+    const homeScore = homeTeamSide === 'local' ? localScore : visitScore;
+    const visitorScore = visitorTeamSide === 'local' ? localScore : visitScore;
+
+    let reason = "";
+    // 1. End of TOP of final inning, Home leading
+    if (sc.halfInning === 'bottom' && isLastInning && homeScore > visitorScore && sc.outs === 0) {
+      reason = `Final de la parte Alta de la entrada ${current}. El equipo local ya va ganando ${homeScore}-${visitorScore}.`;
+    }
+    // 2. End of BOTTOM of final inning (or extra), not a tie
+    else if (sc.halfInning === 'top' && isLastInning && homeScore !== visitorScore && sc.outs === 0) {
+      reason = `Final de la entrada ${current}. Resultado final: ${visitorScore}-${homeScore}.`;
+    }
+    // 3. Walk-off: BOTTOM of final or extra, Home takes lead
+    else if (sc.halfInning === 'bottom' && current >= standardInnings && homeScore > visitorScore) {
+       reason = `¡Walk-off! El equipo local ha tomado la ventaja en la parte baja de la entrada ${current}.`;
+    }
+
+    if (reason) {
+      setTimeout(() => {
+        if (confirm(`${reason}\n\n¿Deseas finalizar el partido ahora?`)) {
+          endGame(matchId);
+        }
+      }, 500);
+    }
   }
 
   function setBattingFirst(matchId, team) {
@@ -2322,6 +2362,7 @@
     delete sc.awaitingRunners;
     syncLineupToPlayerStats(m);
     autoSave(); renderView();
+    checkGameOver(matchId);
   }
   // ────────────────────────────────────────────────────────────
 
@@ -4183,8 +4224,13 @@
 
     m.status = 'finished';
     m.endedAt = Date.now();
+    recalcAllPlayerStats();
     autoSave();
     renderView();
+    
+    // Show summary alert
+    const winner = m.localScore > m.visitScore ? m.local : (m.visitScore > m.localScore ? m.visitante : 'Empate');
+    alert(`Juego Finalizado.\n\n${m.local} ${m.localScore} - ${m.visitScore} ${m.visitante}\n\nGanador: ${winner}`);
   }
 
   function acknowledgeLog(matchId, logId) {
@@ -4407,6 +4453,7 @@
     quickAdjustStat,
     adjustPendingRuns,
     confirmRunners,
+    checkGameOver,
     toggleOut,
     advanceHalf,
     setBattingFirst,
