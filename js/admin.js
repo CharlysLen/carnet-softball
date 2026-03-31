@@ -4,7 +4,7 @@
    CSV import, auto-save to localStorage
    ============================================ */
 
-(function () {
+window.Admin = (function () {
   'use strict';
 
   let players = [];
@@ -1629,12 +1629,34 @@
           </div>
         ` : lineupSubView === 'local' ? `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:15px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.local}</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:10px;">
+              <h3 style="color:var(--gold);font-family:var(--font-display);margin:0;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.local}</h3>
+              <div style="display:flex;gap:4px;align-items:center;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);">
+                <span style="font-size:0.6rem;color:var(--white-muted);text-transform:uppercase;margin-right:6px;font-weight:700;">Perfiles:</span>
+                ${[1, 2, 3].map(s => `
+                  <div style="display:flex;gap:2px;">
+                    <button class="btn btn-sm" style="padding:2px 5px;font-size:0.75rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);" onclick="Admin.saveLineupPreset('${m.id}','${m.local.replace(/'/g, "\\'")}',${s})" title="Guardar Perfil ${s}">💾${s}</button>
+                    <button class="btn btn-sm" style="padding:2px 5px;font-size:0.75rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);" onclick="Admin.loadLineupPreset('${m.id}','${m.local.replace(/'/g, "\\'")}',${s})" title="Cargar Perfil ${s}">📂</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
             ${renderLineupEditor(m, m.local)}
           </div>
         ` : lineupSubView === 'visitante' ? `
           <div style="background:var(--bg-card);border-radius:16px;padding:20px;border:1px solid rgba(255,255,255,0.05);">
-            <h3 style="color:var(--gold);font-family:var(--font-display);margin-bottom:15px;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.visitante}</h3>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:10px;">
+              <h3 style="color:var(--gold);font-family:var(--font-display);margin:0;text-transform:uppercase;letter-spacing:1px;font-size:0.9rem;">Alineación — ${m.visitante}</h3>
+              <div style="display:flex;gap:4px;align-items:center;background:rgba(0,0,0,0.2);padding:4px 8px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);">
+                <span style="font-size:0.6rem;color:var(--white-muted);text-transform:uppercase;margin-right:6px;font-weight:700;">Perfiles:</span>
+                ${[1, 2, 3].map(s => `
+                  <div style="display:flex;gap:2px;">
+                    <button class="btn btn-sm" style="padding:2px 5px;font-size:0.75rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);" onclick="Admin.saveLineupPreset('${m.id}','${m.visitante.replace(/'/g, "\\'")}',${s})" title="Guardar Perfil ${s}">💾${s}</button>
+                    <button class="btn btn-sm" style="padding:2px 5px;font-size:0.75rem;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);" onclick="Admin.loadLineupPreset('${m.id}','${m.visitante.replace(/'/g, "\\'")}',${s})" title="Cargar Perfil ${s}">📂</button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
             ${renderLineupEditor(m, m.visitante)}
           </div>
         ` : `
@@ -2884,8 +2906,6 @@
     logChange(matchId, 'status_change', `${_sn}: ${cur} → ${entry.status}`);
     autoSave();
     renderView();
-  }
-
   function setPlayerOrder(matchId, teamName, playerId, newOrder) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
@@ -2894,16 +2914,64 @@
     if (!entry) return;
     const n = parseInt(newOrder, 10);
     if (isNaN(n) || n < 1) return;
-    entry.order = n;
-    // Renumber all entries sequentially to prevent gaps
-    const sortedEntries = [...m.lineup[teamName]].sort((a, b) => a.order - b.order);
-    sortedEntries.forEach((e, i) => e.order = i + 1);
+    
+    let lineup = m.lineup[teamName];
+    const idx = lineup.findIndex(e => e.playerId === playerId);
+    if (idx < 0) return;
+    
+    const [entryToMove] = lineup.splice(idx, 1);
+    // Insert at new position (clamped to array bounds)
+    const targetIdx = Math.max(0, Math.min(n - 1, lineup.length));
+    lineup.splice(targetIdx, 0, entryToMove);
+    
+    // Renumber all entries sequentially
+    lineup.forEach((e, i) => e.order = i + 1);
+
     const _op = players.find(x => x.id === playerId);
     const _on = _op ? `${_op.nombre.split(' ')[0]} #${_op.dorsal || '?'}` : playerId;
-    const finalOrder = entry.order;
-    logChange(matchId, 'order_change', `${_on}: turno de bateo → ${finalOrder}`);
+    logChange(matchId, 'order_change', `${_on}: posición en lineup → ${targetIdx + 1}`);
     autoSave();
     renderView();
+  }
+
+  // --- Drag & Drop Batting Order Logic ---
+  let draggedPlayerId = null;
+  let draggedTeamName = null;
+
+  function handleDragStart(event, teamName, playerId) {
+    draggedPlayerId = playerId;
+    draggedTeamName = teamName;
+    event.dataTransfer.effectAllowed = 'move';
+    event.target.style.opacity = '0.5';
+  }
+
+  function handleDragOver(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    return false;
+  }
+
+  function handleDrop(event, matchId, teamName, targetPlayerId) {
+    event.preventDefault();
+    if (draggedTeamName !== teamName || draggedPlayerId === targetPlayerId) return;
+    
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    
+    const lineup = m.lineup[teamName];
+    const fromIdx = lineup.findIndex(e => e.playerId === draggedPlayerId);
+    const toIdx = lineup.findIndex(e => e.playerId === targetPlayerId);
+    
+    if (fromIdx < 0 || toIdx < 0) return;
+    
+    const [moved] = lineup.splice(fromIdx, 1);
+    lineup.splice(toIdx, 0, moved);
+    
+    lineup.forEach((e, i) => e.order = i + 1);
+    autoSave();
+    renderView();
+    draggedPlayerId = null;
+    draggedTeamName = null;
   }
 
   function makeSubstitution(matchId, teamName, subPlayerId, outPlayerId) {
@@ -3137,11 +3205,17 @@
       const isSelected = selectedLineupPlayerId === entry.playerId;
       const isBatting = entry.playerId === currentBatterPid;
       const isOnDeck = entry.playerId === nextBatterPid;
+      
+      const dragAttrs = `draggable="true" 
+        ondragstart="Admin.handleDragStart(event, '${teamName}', '${entry.playerId}')" 
+        ondragover="Admin.handleDragOver(event)" 
+        ondrop="Admin.handleDrop(event, '${m.id}', '${teamName}', '${entry.playerId}')"`;
+
       if (st === 'lesionado') {
         const subEntry = entry.replacedBy ? lineup.find(e => e.playerId === entry.replacedBy) : null;
         const subP = subEntry ? players.find(x => x.id === subEntry.playerId) : null;
         displayOrder++;
-        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;opacity:0.5;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
+        rows += `<tr ${dragAttrs} onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:grab;opacity:0.5;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
           <td style="padding:4px 8px;color:#ff9800;font-weight:700;text-decoration:line-through;">${displayOrder}</td>
           <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
           <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
@@ -3152,7 +3226,11 @@
           const isSubSel = selectedLineupPlayerId === subEntry.playerId;
           const isSubBat = subEntry.playerId === currentBatterPid;
           const isSubOnDeck = subEntry.playerId === nextBatterPid;
-          rows += `<tr onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:pointer;${isSubBat ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isSubOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
+          const subDrag = `draggable="true" 
+            ondragstart="Admin.handleDragStart(event, '${teamName}', '${subEntry.playerId}')" 
+            ondragover="Admin.handleDragOver(event)" 
+            ondrop="Admin.handleDrop(event, '${m.id}', '${teamName}', '${subEntry.playerId}')"`;
+          rows += `<tr ${subDrag} onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:grab;${isSubBat ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isSubOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
             <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${displayOrder}</td>
             <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${subP.dorsal || '-'}</td>
             <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(subEntry.position)}</td>
@@ -3164,7 +3242,7 @@
         seenOrders.add(entry.playerId);
       } else if (!seenOrders.has(entry.playerId)) {
         displayOrder++;
-        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;${isBatting ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
+        rows += `<tr ${dragAttrs} onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:grab;${isBatting ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
           <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${displayOrder}</td>
           <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
           <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
@@ -4040,7 +4118,7 @@
     alert(`Alineación de ${teamName} enviada al partido${m.jornada ? ' — Jornada ' + m.jornada : ''} (${m.fecha})`);
   }
 
-  window.Admin = {
+  const AdminApi = {
     init,
     renderView,
     renderTeams: renderTeamShields,
@@ -4076,6 +4154,9 @@
     handlePhotoUpload: handlePlayerPhotoChange,
     handleTeamImageUpload: handleTeamImageChange,
     handleCSVFile,
+    handleDragStart,
+    handleDragOver,
+    handleDrop,
     closeModal,
     saveMatchLog,
 
@@ -4101,6 +4182,12 @@
     editUser,
     saveUser,
     deleteUser,
+
+    // Player administration
+    renderPlayerPhotos,
+    handlePlayerPhotoChange,
+    handleTeamImageChange,
+    handleCSVFile,
 
     // Match CRUD
     openCreateMatch,
@@ -4133,25 +4220,55 @@
     initLineupForMatch,
     setTurnResult,
     setDefenseStat,
-    addPlayerToLineup,
-    removePlayerFromLineup,
-    movePlayerInLineup,
-    selectLineupPlayer,
-    cycleStatus,
-    setPlayerOrder,
-    makeSubstitution,
-    setLineupPosition,
-    startFieldDrag,
-    clearFieldDrag,
-    dropPlayerToPosition,
-    onFieldDragOver,
-    onFieldDrop,
-    touchDragStart,
-    renderLineupList,
-
-    // Legacy aliases
-    toggleStats: renderStats
+    cycleStatus, setLineupPosition, setPlayerOrder, makeSubstitution,
+    handleDragStart, handleDragOver, handleDrop,
+    saveLineupPreset, loadLineupPreset,
+    renderDashboard, renderPlayerList, renderMatchList, renderView, selectLineupPlayer, updateMatchData, archiveMatch
   };
+
+  // --- NEW: Lineup Presets (Max 3 per team) ---
+  function saveLineupPreset(matchId, teamName, slot) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup || !m.lineup[teamName]) return;
+    const team = equipos.find(e => e.nombre === teamName);
+    if (!team) return;
+    if (!team.presets) team.presets = {};
+    
+    // Clean lineup for storage (only essential data)
+    team.presets[slot] = m.lineup[teamName].map(e => ({
+      playerId: e.playerId,
+      order: e.order,
+      position: e.position,
+      status: e.status || 'titular'
+    }));
+    
+    autoSave();
+    alert(`Alineación guardada en el Perfil ${slot} para ${teamName}`);
+    renderView();
+  }
+
+  function loadLineupPreset(matchId, teamName, slot) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup) return;
+    const team = equipos.find(e => e.nombre === teamName);
+    if (!team || !team.presets || !team.presets[slot]) {
+      alert(`No hay ninguna alineación guardada en el Perfil ${slot}`);
+      return;
+    }
+    
+    if (!confirm(`¿Cargar el Perfil ${slot}? Se reemplazará la alineación actual.`)) return;
+    
+    m.lineup[teamName] = team.presets[slot].map(p => ({
+      ...p,
+      turns: [],
+      defense: { outs: 0, errors: 0, assists: 0 }
+    }));
+    
+    autoSave();
+    renderView();
+  }
+
+  window.Admin = AdminApi;
 
   // ── COLLAPSIBLE HEADER ON SCROLL ──
   function initScrollHeader() {
@@ -4159,7 +4276,6 @@
     if (!header) return;
     let lastScrollY = window.scrollY;
     let ticking = false;
-    // Only use transform (header-hidden) — no size changes that affect layout
     window.addEventListener('scroll', function () {
       if (!ticking) {
         window.requestAnimationFrame(function () {
@@ -4167,10 +4283,8 @@
           if (currentY <= 10) {
             header.classList.remove('header-hidden');
           } else if (currentY > lastScrollY + 8) {
-            // Scrolling down: hide header
             header.classList.add('header-hidden');
           } else if (currentY < lastScrollY - 8) {
-            // Scrolling up: show header
             header.classList.remove('header-hidden');
           }
           lastScrollY = currentY;
