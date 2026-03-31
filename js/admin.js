@@ -1849,7 +1849,7 @@
         const bases = sc.bases || [false,false,false];
         const ar = sc.awaitingRunners || null;
         const bDot = (occ, idx) => {
-          const click = (ar && idx !== undefined) ? `onclick="Admin.toggleBaseRunner('${m.id}',${idx})" style="cursor:pointer;transform:rotate(45deg);width:22px;height:22px;background:${occ?'var(--gold)':'rgba(245,166,35,0.15)'};border:2px solid ${occ?'var(--gold)':'var(--gold)'};border-radius:3px;transition:all 0.15s;"` : `style="transform:rotate(45deg);width:16px;height:16px;background:${occ?'var(--gold)':'transparent'};border:2px solid ${occ?'var(--gold)':'rgba(255,255,255,0.3)'};border-radius:2px;"`;
+          const click = `onclick="Admin.toggleBaseRunner('${m.id}',${idx})" style="cursor:pointer;transform:rotate(45deg);width:${(ar && idx !== undefined) ? 22 : 16}px;height:${(ar && idx !== undefined) ? 22 : 16}px;background:${occ?'var(--gold)':'rgba(245,166,35,0.15)'};border:2px solid ${occ?'var(--gold)':'var(--gold)'};border-radius:3px;transition:all 0.15s;"`;
           return `<div ${click}></div>`;
         };
 
@@ -1923,6 +1923,7 @@
             ${playBtn('3','3B','var(--green)')}
             ${playBtn('4','HR','var(--gold)')}
             ${playBtn('E','E','#ff9800')}
+            ${playBtn('RUN','RUN','#e91e63')}
           </div>
           ` : `<div style="font-size:0.8rem;color:var(--white-muted);">Crea la alineación en la pestaña del equipo para registrar jugadas.</div>`}
         </div>`;
@@ -2036,6 +2037,16 @@
     if (!sc) return;
     sc.bases = [false, false, false];
     delete sc.awaitingRunners;
+    
+    // Si no se anotó nada, dejar un 0
+    if (sc.battingFirst) {
+      const side = sc.halfInning === 'top' ? sc.battingFirst : (sc.battingFirst === 'local' ? 'visitante' : 'local');
+      const inn = sc.currentInning || 0;
+      if (sc[side] && (sc[side][inn] === null || sc[side][inn] === undefined)) {
+        sc[side][inn] = 0;
+      }
+    }
+
     if (sc.halfInning === 'top') {
       sc.halfInning = 'bottom';
       sc.outs = 0;
@@ -2172,11 +2183,22 @@
       if (isRun) entry.turns[ti].run = true;
     }
 
+    // RUN (Anotar carrera manualmente sin consumir turno)
+    if (code === 'RUN') {
+      sc[side][inn] = Number(sc[side][inn] || 0) + 1;
+      m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
+      syncLineupToPlayerStats(m);
+      autoSave(); renderView();
+      return;
+    }
+
     // OUT / K
     if (code === 'O' || code === 'K') {
       recordTurn(code, 0, false);
       sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
       sc.outs = (sc.outs || 0) + 1;
+      syncLineupToPlayerStats(m);
       autoSave(); renderView();
       if (sc.outs >= 3) setTimeout(() => advanceHalf(matchId), 700);
       return;
@@ -2193,6 +2215,7 @@
       m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
       recordTurn('4', runs, true);
       sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      syncLineupToPlayerStats(m);
       autoSave(); renderView();
       return;
     }
@@ -2210,6 +2233,7 @@
       }
       recordTurn('BB', rbi, false);
       sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      syncLineupToPlayerStats(m);
       autoSave(); renderView();
       return;
     }
@@ -2245,8 +2269,10 @@
 
   function toggleBaseRunner(matchId, baseIdx) {
     const m = partidos.find(x => x.id === matchId);
-    if (!m || !m.scorecard || !m.scorecard.awaitingRunners) return;
+    if (!m || !m.scorecard) return;
+    if (!m.scorecard.bases) m.scorecard.bases = [false, false, false];
     m.scorecard.bases[baseIdx] = !m.scorecard.bases[baseIdx];
+    autoSave();
     renderView();
   }
 
@@ -2281,6 +2307,7 @@
     }
 
     delete sc.awaitingRunners;
+    syncLineupToPlayerStats(m);
     autoSave(); renderView();
   }
   // ────────────────────────────────────────────────────────────
@@ -4349,6 +4376,9 @@
     changeInning,
     addExtraInning,
     initLineupForMatch,
+    addPlayerToLineup,
+    removePlayerFromLineup,
+    movePlayerInLineup,
     setTurnResult,
     setDefenseStat,
     cycleStatus,
@@ -4358,11 +4388,6 @@
     handleDragStart,
     handleDragOver,
     handleDrop,
-    startFieldDrag,
-    clearFieldDrag,
-    onFieldDragOver,
-    onFieldDrop,
-    dropPlayerToPosition,
     saveLineupPreset,
     loadLineupPreset,
     renderView,
