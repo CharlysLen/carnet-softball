@@ -2906,6 +2906,8 @@
     logChange(matchId, 'status_change', `${_sn}: ${cur} → ${entry.status}`);
     autoSave();
     renderView();
+  }
+
   function setPlayerOrder(matchId, teamName, playerId, newOrder) {
     const m = partidos.find(x => x.id === matchId);
     if (!m || !m.lineup || !m.lineup[teamName]) return;
