@@ -1710,7 +1710,18 @@
         batterPos: { local: 0, visitante: 0 } // current batter index in lineup
       };
     }
-    return m.scorecard;
+    // Ensure all properties exist — Firebase can drop all-null arrays during serialization
+    const sc = m.scorecard;
+    if (!Array.isArray(sc.local)) sc.local = Array(7).fill(null);
+    if (!Array.isArray(sc.visitante)) sc.visitante = Array(7).fill(null);
+    if (!sc.hits) sc.hits = { local: 0, visitante: 0 };
+    if (!sc.errors) sc.errors = { local: 0, visitante: 0 };
+    if (sc.outs === undefined) sc.outs = 0;
+    if (sc.currentInning === undefined) sc.currentInning = 0;
+    if (!sc.halfInning) sc.halfInning = 'top';
+    if (!Array.isArray(sc.bases)) sc.bases = [false, false, false];
+    if (!sc.batterPos) sc.batterPos = { local: 0, visitante: 0 };
+    return sc;
   }
 
   function renderScorecard(m) {
@@ -1985,7 +1996,8 @@
       sc.outs = 0;
     } else {
       const nextInning = (sc.currentInning || 0) + 1;
-      if (nextInning < sc.local.length) {
+      const localLen = Array.isArray(sc.local) ? sc.local.length : 7;
+      if (nextInning < localLen) {
         sc.currentInning = nextInning;
       }
       sc.halfInning = 'top';
@@ -2050,7 +2062,7 @@
   }
 
   function applyBaseRules(bases, code) {
-    let b = [...bases];
+    let b = Array.isArray(bases) ? [...bases] : [false, false, false];
     let runs = 0, rbi = 0;
     let isOut = false;
     switch (code) {
@@ -2128,12 +2140,13 @@
       }
     }
 
+    // Always advance batter position (even on outs)
+    sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
     if (isOut) {
       sc.outs = (sc.outs || 0) + 1;
       autoSave(); renderView();
       if (sc.outs >= 3) setTimeout(() => advanceHalf(matchId), 700);
     } else {
-      if (!isOut) sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
       autoSave(); renderView();
     }
   }
@@ -3071,14 +3084,29 @@
     const lineup = match.lineup && match.lineup[teamName] ? match.lineup[teamName] : [];
     if (lineup.length === 0) return '';
     const getStatus = e => e.status || (e.starter === false ? 'suplente' : 'titular');
-    // Build slots: keyed by the "base" order (lesionado's order = canonical slot)
-    // Collect all titulares and lesionados, skip pure suplentes/ausentes
+
+    // Determine current batter and next-up batter for this team (from scorecard)
+    let currentBatterPid = null;
+    let nextBatterPid = null; // Highlighted when team is NOT currently batting (on deck for next half)
+    if (match.status === 'live' && match.scorecard && match.scorecard.battingFirst) {
+      const sc = match.scorecard;
+      const side = sc.halfInning === 'top' ? sc.battingFirst : (sc.battingFirst === 'local' ? 'visitante' : 'local');
+      const sideTeam = side === 'local' ? match.local : match.visitante;
+      const thisTeamSide = match.local === teamName ? 'local' : 'visitante';
+      const activeLu = [...lineup].filter(e => getStatus(e) !== 'ausente').sort((a,b) => (a.order||0)-(b.order||0));
+      const bpIdx = (sc.batterPos || {})[thisTeamSide] || 0;
+      const cur = activeLu.length ? activeLu[bpIdx % activeLu.length] : null;
+      if (sideTeam === teamName) {
+        // This team is currently batting
+        if (cur) currentBatterPid = cur.playerId;
+      } else {
+        // This team is on deck — show who bats first when their turn comes
+        if (cur) nextBatterPid = cur.playerId;
+      }
+    }
+
     const active = lineup.filter(e => ['titular', 'lesionado'].includes(getStatus(e)));
     if (active.length === 0) return '';
-
-    // Group by slot: for a sub (replacesPlayer set), slot = their order (which was inherited)
-    // For a lesionado, slot = their order
-    // Sort by order
     const sorted = [...active].sort((a, b) => a.order - b.order);
 
     let rows = '';
@@ -3088,6 +3116,8 @@
       const p = players.find(x => x.id === entry.playerId);
       if (!p) continue;
       const isSelected = selectedLineupPlayerId === entry.playerId;
+      const isBatting = entry.playerId === currentBatterPid;
+      const isOnDeck = entry.playerId === nextBatterPid;
       if (st === 'lesionado') {
         const subEntry = entry.replacedBy ? lineup.find(e => e.playerId === entry.replacedBy) : null;
         const subP = subEntry ? players.find(x => x.id === subEntry.playerId) : null;
@@ -3100,22 +3130,24 @@
         </tr>`;
         if (subP && subEntry) {
           const isSubSel = selectedLineupPlayerId === subEntry.playerId;
-          rows += `<tr onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:pointer;${isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
+          const isSubBat = subEntry.playerId === currentBatterPid;
+          const isSubOnDeck = subEntry.playerId === nextBatterPid;
+          rows += `<tr onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:pointer;${isSubBat ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isSubOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
             <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${subEntry.order}</td>
             <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${subP.dorsal || '-'}</td>
             <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(subEntry.position)}</td>
-            <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSubSel ? 'color:var(--gold);' : ''}">${subP.nombre}</td>
+            <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSubBat ? 'color:var(--gold);' : isSubOnDeck ? 'color:#64b5f6;' : isSubSel ? 'color:var(--gold);' : ''}">${subP.nombre}${isSubBat ? ' <span style="font-size:0.65rem;background:var(--gold);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">AL BATE</span>' : isSubOnDeck ? ' <span style="font-size:0.65rem;background:#64b5f6;color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">SIGUIENTE</span>' : ''}</td>
             <td></td>
           </tr>`;
           seenOrders.add(subEntry.playerId);
         }
         seenOrders.add(entry.playerId);
       } else if (!seenOrders.has(entry.playerId)) {
-        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
+        rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;${isBatting ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
           <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${entry.order}</td>
           <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
           <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
-          <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${entry.replacesPlayer ? ' <span style="font-size:0.6rem;color:var(--green);">↑</span>' : ''}</td>
+          <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isBatting ? 'color:var(--gold);' : isOnDeck ? 'color:#64b5f6;' : isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${isBatting ? ' <span style="font-size:0.65rem;background:var(--gold);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">AL BATE</span>' : isOnDeck ? ' <span style="font-size:0.65rem;background:#64b5f6;color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">SIGUIENTE</span>' : ''}${entry.replacesPlayer ? ' <span style="font-size:0.6rem;color:var(--green);">↑</span>' : ''}</td>
           <td></td>
         </tr>`;
         seenOrders.add(entry.playerId);
