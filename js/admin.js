@@ -2521,16 +2521,20 @@
           background:${color};color:${active ? '#fff' : 'var(--white-muted)'};cursor:pointer;min-width:32px;">
           ${TURN_RESULT_LABELS[code]}</button>`;
       }
-      h += `</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">`;
-      const sbA = turn.sb ? 'background:var(--blue-check);color:#fff;' : '';
-      const runA = turn.run ? 'background:var(--green);color:#fff;' : '';
+      h += `</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">`;
+      const sbA = turn.sb ? 'background:var(--blue-check);color:#fff;border-color:var(--blue-check);' : '';
+      const runA = turn.run ? 'background:var(--green);color:#fff;border-color:var(--green);' : '';
       h += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'sb','')"
-        style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${sbA}">S</button>`;
+        title="Base robada"
+        style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${sbA}">SB</button>`;
       h += `<button onclick="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'run','')"
-        style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runA}">A</button>`;
-      h += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
-        style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
-        ${[0, 1, 2, 3, 4].map(v => `<option value="${v}" ${turn.rbi === v ? 'selected' : ''}>I:${v}</option>`).join('')}</select>`;
+        title="Anotó carrera"
+        style="padding:3px 8px;font-size:0.7rem;border-radius:4px;border:1px solid rgba(255,255,255,0.15);cursor:pointer;${runA}">R</button>`;
+      const rbiVal = turn.rbi || 0;
+      h += `<label style="font-size:0.68rem;color:var(--white-muted);display:flex;align-items:center;gap:4px;">RBI
+        <select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'rbi',this.value)"
+          style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:${rbiVal>0?'var(--green)':'var(--white)'};border:1px solid ${rbiVal>0?'var(--green)':'rgba(255,255,255,0.15)'};border-radius:4px;font-weight:${rbiVal>0?'700':'400'};">
+          ${[0,1,2,3,4].map(v=>`<option value="${v}" ${rbiVal===v?'selected':''}>${v}</option>`).join('')}</select></label>`;
       h += `<select onchange="Admin.setTurnResult('${mid}','${tn}','${pid}',${t},'direction',this.value)"
         style="padding:3px 6px;font-size:0.7rem;background:var(--bg-card-inner);color:var(--white);border:1px solid rgba(255,255,255,0.15);border-radius:4px;">
         <option value="" ${!turn.direction ? 'selected' : ''}>D:-</option>
