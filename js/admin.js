@@ -1783,8 +1783,8 @@
       return `<td class="sc-cell" ${click} style="${bg}${clr}${canEdit ? 'cursor:pointer;' : ''}">${display === 0 ? '0' : (display ?? '')}</td>`;
     }
 
-    const linesLocal = players.filter(p => p.equipo === m.local && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0));
-    const linesVisit = players.filter(p => p.equipo === m.visitante && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0));
+    const linesLocal = players.filter(p => p.equipo === m.local && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0 || m.playerStats[p.id].bb > 0 || m.playerStats[p.id].r > 0 || m.playerStats[p.id].rbi > 0));
+    const linesVisit = players.filter(p => p.equipo === m.visitante && m.playerStats && m.playerStats[p.id] && (m.playerStats[p.id].ab > 0 || m.playerStats[p.id].h > 0 || m.playerStats[p.id].bb > 0 || m.playerStats[p.id].r > 0 || m.playerStats[p.id].rbi > 0));
 
     function battingTable(list) {
       if (!list.length) return `<div style="color:var(--white-muted);font-size:0.8rem;padding:8px 0;">Sin stats registradas</div>`;
