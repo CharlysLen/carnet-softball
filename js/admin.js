@@ -2625,7 +2625,7 @@
   function recalcAllPlayerStats() {
     // Reset all player stats (including extended fields)
     for (const p of players) {
-      p.stats = { ab: 0, h: 0, hr: 0, rbi: 0, r: 0, avg: '.000', pa: 0, doubles: 0, triples: 0, bb: 0, k: 0, sb: 0 };
+      p.stats = { ab: 0, h: 0, singles: 0, hr: 0, rbi: 0, r: 0, avg: '.000', pa: 0, doubles: 0, triples: 0, bb: 0, k: 0, sb: 0 };
     }
     // Accumulate from all matches
     for (const m of partidos) {
@@ -2637,6 +2637,7 @@
         if (!p) continue;
         p.stats.ab += (parseInt(s.ab, 10) || 0);
         p.stats.h += (parseInt(s.h, 10) || 0);
+        p.stats.singles += (parseInt(s.singles, 10) || 0);
         p.stats.hr += (parseInt(s.hr, 10) || 0);
         p.stats.rbi += (parseInt(s.rbi, 10) || 0);
         p.stats.r += (parseInt(s.r, 10) || 0);
@@ -2650,6 +2651,7 @@
             if (!p) continue;
             const s = calcLineupSummary(entry);
             p.stats.pa += s.pa;
+            p.stats.singles += s.singles;
             p.stats.doubles += s.doubles;
             p.stats.triples += s.triples;
             p.stats.bb += s.bb;
@@ -2675,17 +2677,18 @@
     const pa = turns.length;
     const bb = turns.filter(t => t.result === 'BB' || t.result === 'B').length;
     const ab = pa - bb;
-    const h = turns.filter(t => ['H', '2', '3', '4'].includes(t.result)).length;
+    const singles = turns.filter(t => t.result === 'H').length;
     const doubles = turns.filter(t => t.result === '2').length;
     const triples = turns.filter(t => t.result === '3').length;
     const hr = turns.filter(t => t.result === '4').length;
+    const h = singles + doubles + triples + hr;
     const k = turns.filter(t => t.result === 'K').length;
     const o = turns.filter(t => t.result === 'O').length;
     const sb = turns.filter(t => t.sb).length;
     const r = turns.filter(t => t.run).length;
     const rbi = turns.reduce((s, t) => s + (t.rbi || 0), 0);
     const avg = ab > 0 ? (h / ab).toFixed(3).replace(/^0+/, '') : '.000';
-    return { pa, ab, h, doubles, triples, hr, bb, k, o, sb, r, rbi, avg };
+    return { pa, ab, h, singles, doubles, triples, hr, bb, k, o, sb, r, rbi, avg };
   }
 
   function syncLineupToPlayerStats(match) {
@@ -2694,7 +2697,7 @@
     for (const entries of Object.values(match.lineup)) {
       for (const entry of entries) {
         const s = calcLineupSummary(entry);
-        match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, hr: s.hr, rbi: s.rbi, r: s.r, bb: s.bb };
+        match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, singles: s.singles, hr: s.hr, rbi: s.rbi, r: s.r, bb: s.bb };
       }
     }
   }
@@ -3461,14 +3464,14 @@
           <th style="padding:6px 4px;text-align:center;">Pos</th>
           <th style="padding:6px 8px;text-align:left;">Jugador</th>
           <th style="padding:6px 4px;">PA</th><th style="padding:6px 4px;">AB</th>
-          <th style="padding:6px 4px;">H</th><th style="padding:6px 4px;">2B</th>
+          <th style="padding:6px 4px;" title="Sencillos (Hits de una base)">H</th><th style="padding:6px 4px;">2B</th>
           <th style="padding:6px 4px;">3B</th><th style="padding:6px 4px;">HR</th>
           <th style="padding:6px 4px;">BB</th><th style="padding:6px 4px;">K</th>
           <th style="padding:6px 4px;">SB</th><th style="padding:6px 4px;">R</th>
           <th style="padding:6px 4px;">RBI</th><th style="padding:6px 4px;">AVG</th>
         </tr></thead><tbody>`;
 
-    const totals = { pa: 0, ab: 0, h: 0, doubles: 0, triples: 0, hr: 0, bb: 0, k: 0, sb: 0, r: 0, rbi: 0 };
+    const totals = { pa: 0, ab: 0, h: 0, singles: 0, doubles: 0, triples: 0, hr: 0, bb: 0, k: 0, sb: 0, r: 0, rbi: 0 };
 
     for (const entry of lineup) {
       const p = players.find(x => x.id === entry.playerId);
@@ -3489,7 +3492,7 @@
         <td style="padding:4px 8px;font-weight:600;${isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${statusTag}</td>
         <td style="padding:4px;text-align:center;">${s.pa}</td>
         <td style="padding:4px;text-align:center;">${s.ab}</td>
-        <td style="padding:4px;text-align:center;color:var(--green);font-weight:700;">${s.h}</td>
+        <td style="padding:4px;text-align:center;color:var(--green);font-weight:700;">${s.singles}</td>
         <td style="padding:4px;text-align:center;">${s.doubles}</td>
         <td style="padding:4px;text-align:center;">${s.triples}</td>
         <td style="padding:4px;text-align:center;${s.hr > 0 ? 'color:var(--red);font-weight:700;' : ''}">${s.hr}</td>
@@ -3506,7 +3509,7 @@
       <td colspan="4" style="padding:6px 8px;">TOTALES</td>
       <td style="padding:4px;text-align:center;">${totals.pa}</td>
       <td style="padding:4px;text-align:center;">${totals.ab}</td>
-      <td style="padding:4px;text-align:center;">${totals.h}</td>
+      <td style="padding:4px;text-align:center;">${totals.singles}</td>
       <td style="padding:4px;text-align:center;">${totals.doubles}</td>
       <td style="padding:4px;text-align:center;">${totals.triples}</td>
       <td style="padding:4px;text-align:center;">${totals.hr}</td>
