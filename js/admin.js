@@ -1704,7 +1704,8 @@
         errors: { local: 0, visitante: 0 },
         outs: 0,
         currentInning: 0,
-        halfInning: 'top' // top = visitante bats, bottom = local bats
+        halfInning: 'top', // top = firstBatter bats, bottom = other team bats
+        battingFirst: null  // null until user picks; 'local' or 'visitante'
       };
     }
     return m.scorecard;
@@ -1715,7 +1716,7 @@
     const sc = m.scorecard || {
       local: Array(7).fill(null), visitante: Array(7).fill(null),
       hits: { local: 0, visitante: 0 }, errors: { local: 0, visitante: 0 },
-      outs: 0, currentInning: 0, halfInning: 'top'
+      outs: 0, currentInning: 0, halfInning: 'top', battingFirst: null
     };
     const localTeam = equipos.find(e => e.nombre === m.local);
     const visitTeam = equipos.find(e => e.nombre === m.visitante);
@@ -1725,10 +1726,13 @@
     const outs = sc.outs || 0;
     const currentInning = sc.currentInning || 0;
     const half = sc.halfInning || 'top';
+    const firstBatter = sc.battingFirst || 'visitante';
+    const battingNow = half === 'top' ? firstBatter : (firstBatter === 'local' ? 'visitante' : 'local');
+    const battingNowName = battingNow === 'local' ? m.local : m.visitante;
 
     function cell(team, idx, runs) {
       const isActive = m.status === 'live' && idx === currentInning &&
-        ((team === 'visitante' && half === 'top') || (team === 'local' && half === 'bottom'));
+        ((team === firstBatter && half === 'top') || (team !== firstBatter && half === 'bottom'));
       const display = runs === null ? (isActive ? '·' : '') : runs;
       const bg = isActive ? 'background:rgba(245,166,35,0.12);' : '';
       const clr = isActive ? 'color:var(--gold);' : runs === 0 ? 'color:rgba(255,255,255,0.3);' : '';
@@ -1765,7 +1769,21 @@
     }
 
     return `
-      ${m.status === 'live' && canEdit ? `
+      ${m.status === 'live' && canEdit && !sc.battingFirst ? `
+      <div style="background:rgba(245,166,35,0.08);border:1px solid var(--gold);border-radius:12px;padding:20px;text-align:center;margin-bottom:16px;">
+        <div style="font-family:var(--font-display);font-size:0.95rem;color:var(--gold);margin-bottom:16px;">⚾ ¿Quién batea primero?</div>
+        <div style="display:flex;gap:12px;justify-content:center;">
+          <button class="btn btn-secondary" onclick="Admin.setBattingFirst('${m.id}','local')" style="flex:1;max-width:160px;display:flex;align-items:center;gap:8px;justify-content:center;">
+            ${localTeam ? renderEmblem(localTeam, '1.2rem') : '🥎'} ${m.local}
+          </button>
+          <button class="btn btn-secondary" onclick="Admin.setBattingFirst('${m.id}','visitante')" style="flex:1;max-width:160px;display:flex;align-items:center;gap:8px;justify-content:center;">
+            ${visitTeam ? renderEmblem(visitTeam, '1.2rem') : '🥎'} ${m.visitante}
+          </button>
+        </div>
+      </div>
+      ` : ''}
+
+      ${m.status === 'live' && canEdit && sc.battingFirst ? `
       <div class="sc-live-controls">
         <div class="sc-inning-block">
           <div class="sc-ctrl-label">Entrada</div>
@@ -1775,7 +1793,7 @@
             <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',1)">▶</button>
           </div>
           <button onclick="Admin.toggleHalf('${m.id}')" class="sc-half-btn">
-            ${half === 'top' ? '▲ Alta · ' + m.visitante : '▼ Baja · ' + m.local}
+            ${half === 'top' ? '▲ Alta' : '▼ Baja'} · ${battingNowName}
           </button>
         </div>
 
@@ -1786,7 +1804,7 @@
             <div onclick="Admin.toggleOut('${m.id}',${i})" class="sc-out-dot ${outs >= i ? 'sc-out-filled' : ''}"></div>`).join('')}
           </div>
           <div style="font-size:0.72rem;margin-top:6px;color:${outs === 3 ? 'var(--red)' : 'var(--white-muted)'};">
-            ${outs === 3 ? '🔄 3 outs — cambio de turno' : outs + ' / 3'}
+            ${outs === 3 ? '🔄 Avanzando...' : outs + ' / 3'}
           </div>
         </div>
       </div>
@@ -1884,7 +1902,43 @@
     const m = partidos.find(x => x.id === matchId);
     if (!m || !canEditMatch(m)) return;
     const sc = initScorecard(m);
-    sc.outs = sc.outs === outNum ? outNum - 1 : outNum;
+    const newOuts = sc.outs === outNum ? outNum - 1 : outNum;
+    sc.outs = newOuts;
+    autoSave();
+    renderView();
+    if (newOuts === 3) {
+      setTimeout(() => advanceHalf(matchId), 700);
+    }
+  }
+
+  function advanceHalf(matchId) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = m.scorecard;
+    if (!sc) return;
+    if (sc.halfInning === 'top') {
+      sc.halfInning = 'bottom';
+      sc.outs = 0;
+    } else {
+      const nextInning = (sc.currentInning || 0) + 1;
+      if (nextInning < sc.local.length) {
+        sc.currentInning = nextInning;
+      }
+      // if at last inning, stay there; user can add extra inning manually
+      sc.halfInning = 'top';
+      sc.outs = 0;
+    }
+    autoSave();
+    renderView();
+  }
+
+  function setBattingFirst(matchId, team) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    sc.battingFirst = team;
+    sc.halfInning = 'top';
+    sc.outs = 0;
     autoSave();
     renderView();
   }
@@ -3851,6 +3905,8 @@
     editInning,
     editStat,
     toggleOut,
+    advanceHalf,
+    setBattingFirst,
     toggleHalf,
     changeInning,
     addExtraInning,
