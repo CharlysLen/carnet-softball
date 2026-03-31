@@ -1705,7 +1705,9 @@
         outs: 0,
         currentInning: 0,
         halfInning: 'top', // top = firstBatter bats, bottom = other team bats
-        battingFirst: null  // null until user picks; 'local' or 'visitante'
+        battingFirst: null,  // null until user picks; 'local' or 'visitante'
+        bases: [false, false, false], // [1st, 2nd, 3rd]
+        batterPos: { local: 0, visitante: 0 } // current batter index in lineup
       };
     }
     return m.scorecard;
@@ -1789,32 +1791,87 @@
       </div>
       ` : ''}
 
-      ${m.status === 'live' && canEdit && sc.battingFirst ? `
-      <div class="sc-live-controls">
-        <div class="sc-inning-block">
-          <div class="sc-ctrl-label">Entrada</div>
-          <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
-            <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',-1)" ${currentInning === 0 ? 'disabled' : ''}>◀</button>
-            <span style="font-family:var(--font-display);font-size:2rem;color:var(--gold);min-width:2ch;text-align:center;">${currentInning + 1}</span>
-            <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',1)">▶</button>
-          </div>
-          <button onclick="Admin.toggleHalf('${m.id}')" class="sc-half-btn">
-            ${half === 'top' ? '▲ Alta' : '▼ Baja'} · ${battingNowName}
-          </button>
-        </div>
+      ${m.status === 'live' && canEdit && sc.battingFirst ? (() => {
+        // Current batter
+        const bpKey = battingNow;
+        const bpLineup = (() => {
+          const teamName = battingNow === 'local' ? m.local : m.visitante;
+          const lu = m.lineup && m.lineup[teamName] ? m.lineup[teamName] : [];
+          return [...lu].filter(e => e.status !== 'ausente').sort((a,b) => (a.order||0)-(b.order||0));
+        })();
+        const bpIdx = (sc.batterPos || {})[battingNow] || 0;
+        const currentBatter = bpLineup.length ? bpLineup[bpIdx % bpLineup.length] : null;
+        const cbPlayer = currentBatter ? players.find(p => p.id === currentBatter.playerId) : null;
+        const cbStats = currentBatter ? (() => {
+          const entry = currentBatter;
+          const turns = (entry.turns||[]).filter(t=>t.result);
+          const ab = turns.filter(t=>!['BB'].includes(t.result)).length;
+          const h = turns.filter(t=>['H','2','3','4'].includes(t.result)).length;
+          return `${h}-${ab}`;
+        })() : '';
 
-        <div class="sc-outs-block">
-          <div class="sc-ctrl-label">Outs</div>
-          <div style="display:flex;gap:10px;margin-top:6px;">
-            ${[1,2,3].map(i => `
-            <div onclick="Admin.toggleOut('${m.id}',${i})" class="sc-out-dot ${outs >= i ? 'sc-out-filled' : ''}"></div>`).join('')}
+        // Bases diamond
+        const bases = sc.bases || [false,false,false];
+        const bDot = (occ) => `<div style="width:16px;height:16px;transform:rotate(45deg);background:${occ?'var(--gold)':'transparent'};border:2px solid ${occ?'var(--gold)':'rgba(255,255,255,0.3)'};border-radius:2px;"></div>`;
+
+        const playBtn = (code, label, color) =>
+          `<button onclick="Admin.recordPlay('${m.id}','${code}')"
+            style="padding:8px 10px;font-size:0.78rem;font-weight:700;border-radius:8px;border:1px solid ${color};
+            background:rgba(0,0,0,0.3);color:${color};cursor:pointer;min-width:44px;-webkit-tap-highlight-color:transparent;">
+            ${label}</button>`;
+
+        return `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:16px;margin-bottom:16px;">
+          <!-- Top row: inning/half + outs -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',-1)" ${currentInning===0?'disabled':''}>◀</button>
+              <span style="font-family:var(--font-display);font-size:1.6rem;color:var(--gold);min-width:2ch;text-align:center;">${currentInning+1}</span>
+              <button class="btn btn-sm btn-secondary" onclick="Admin.changeInning('${m.id}',1)">▶</button>
+              <button onclick="Admin.toggleHalf('${m.id}')" class="sc-half-btn" style="margin-left:4px;">
+                ${half==='top'?'▲ Alta':'▼ Baja'} · ${battingNowName}
+              </button>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span style="font-size:0.7rem;color:var(--white-muted);">OUTS</span>
+              ${[1,2,3].map(i=>`<div onclick="Admin.toggleOut('${m.id}',${i})" class="sc-out-dot ${outs>=i?'sc-out-filled':''}"></div>`).join('')}
+              <span style="font-size:0.7rem;color:${outs===3?'var(--red)':'var(--white-muted)'};">${outs===3?'🔄':'  '+outs+'/3'}</span>
+            </div>
           </div>
-          <div style="font-size:0.72rem;margin-top:6px;color:${outs === 3 ? 'var(--red)' : 'var(--white-muted)'};">
-            ${outs === 3 ? '🔄 Avanzando...' : outs + ' / 3'}
+
+          <!-- Batter + bases row -->
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;flex-wrap:wrap;">
+            <!-- Bases diamond -->
+            <div style="display:grid;grid-template-columns:repeat(3,20px);grid-template-rows:repeat(3,20px);gap:2px;flex-shrink:0;">
+              <div></div>${bDot(bases[1])}<div></div>
+              ${bDot(bases[2])}<div></div>${bDot(bases[0])}
+              <div></div><div style="width:16px;height:16px;background:rgba(255,255,255,0.15);border-radius:2px;transform:rotate(45deg);"></div><div></div>
+            </div>
+            <!-- Current batter info -->
+            <div style="flex:1;min-width:120px;">
+              <div style="font-size:0.65rem;color:var(--white-muted);text-transform:uppercase;letter-spacing:1px;">Al bate · ${battingNowName}</div>
+              ${cbPlayer ? `
+              <div style="font-weight:700;font-size:1rem;color:var(--white);margin-top:2px;">${cbPlayer.nombre}</div>
+              <div style="font-size:0.72rem;color:var(--white-muted);">#${cbPlayer.dorsal||'-'} · Bat ${currentBatter.order} · ${cbStats}</div>
+              ` : '<div style="color:var(--white-muted);font-size:0.8rem;">Sin alineación</div>'}
+            </div>
           </div>
-        </div>
-      </div>
-      ` : ''}
+
+          <!-- Play buttons -->
+          ${bpLineup.length ? `
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${playBtn('O','OUT','rgba(255,255,255,0.4)')}
+            ${playBtn('K','K','rgba(255,255,255,0.4)')}
+            ${playBtn('BB','BB','#64b5f6')}
+            ${playBtn('H','H','var(--green)')}
+            ${playBtn('2','2B','var(--green)')}
+            ${playBtn('3','3B','var(--green)')}
+            ${playBtn('4','HR','var(--gold)')}
+            ${playBtn('E','E','#ff9800')}
+          </div>
+          ` : `<div style="font-size:0.8rem;color:var(--white-muted);">Crea la alineación en la pestaña del equipo para registrar jugadas.</div>`}
+        </div>`;
+      })() : ''}
 
       <div class="sc-table-wrap">
         <table class="sc-table">
@@ -1922,6 +1979,7 @@
     if (!m || !canEditMatch(m)) return;
     const sc = m.scorecard;
     if (!sc) return;
+    sc.bases = [false, false, false];
     if (sc.halfInning === 'top') {
       sc.halfInning = 'bottom';
       sc.outs = 0;
@@ -1930,7 +1988,6 @@
       if (nextInning < sc.local.length) {
         sc.currentInning = nextInning;
       }
-      // if at last inning, stay there; user can add extra inning manually
       sc.halfInning = 'top';
       sc.outs = 0;
     }
@@ -1982,6 +2039,105 @@
     autoSave();
     renderView();
   }
+
+  // ── Play-by-play engine ──────────────────────────────────────
+  function getLineupOrdered(m, side) {
+    const teamName = side === 'local' ? m.local : m.visitante;
+    const lineup = m.lineup && m.lineup[teamName] ? m.lineup[teamName] : [];
+    return [...lineup]
+      .filter(e => e.status !== 'ausente')
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  function applyBaseRules(bases, code) {
+    let b = [...bases];
+    let runs = 0, rbi = 0;
+    let isOut = false;
+    switch (code) {
+      case 'H':  // single: 3rd scores, 2nd→3rd, 1st→2nd, batter→1st
+        if (b[2]) { runs++; rbi++; }
+        b[2] = b[1]; b[1] = b[0]; b[0] = true;
+        break;
+      case '2':  // double: 3rd scores, 2nd scores, 1st→3rd, batter→2nd
+        if (b[2]) { runs++; rbi++; }
+        if (b[1]) { runs++; rbi++; }
+        b[2] = b[0]; b[1] = true; b[0] = false;
+        break;
+      case '3':  // triple: all score, batter→3rd
+        runs = b.filter(Boolean).length; rbi = runs;
+        b = [false, false, true];
+        break;
+      case '4':  // home run: all + batter score
+        runs = b.filter(Boolean).length + 1; rbi = runs;
+        b = [false, false, false];
+        break;
+      case 'BB': // walk: forced runners only
+        if (b[0] && b[1] && b[2]) { runs++; rbi++; }
+        else if (b[0] && b[1]) { b[2] = true; }
+        else if (b[0]) { b[1] = true; }
+        b[0] = true;
+        break;
+      case 'E':  // error: like single but no RBI
+        if (b[2]) { runs++; }
+        b[2] = b[1]; b[1] = b[0]; b[0] = true;
+        break;
+      case 'O': case 'K':
+        isOut = true;
+        break;
+    }
+    return { bases: b, runs, rbi, isOut };
+  }
+
+  function recordPlay(matchId, code) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !canEditMatch(m)) return;
+    const sc = initScorecard(m);
+    if (!sc.battingFirst) return;
+    if (!sc.bases) sc.bases = [false, false, false];
+    if (!sc.batterPos) sc.batterPos = { local: 0, visitante: 0 };
+
+    const side = sc.halfInning === 'top' ? sc.battingFirst : (sc.battingFirst === 'local' ? 'visitante' : 'local');
+    const lineup = getLineupOrdered(m, side);
+    if (!lineup.length) return;
+    const batter = lineup[sc.batterPos[side] % lineup.length];
+    const inn = sc.currentInning || 0;
+
+    const { bases, runs, rbi, isOut } = applyBaseRules(sc.bases, code);
+    sc.bases = bases;
+
+    // Update inning score
+    if (runs > 0) {
+      sc[side][inn] = (sc[side][inn] || 0) + runs;
+    } else if (sc[side][inn] === null && !isOut) {
+      sc[side][inn] = 0;
+    }
+    m.localScore = (sc.local || []).reduce((s, r) => s + (r || 0), 0);
+    m.visitScore = (sc.visitante || []).reduce((s, r) => s + (r || 0), 0);
+
+    // Record on batter's lineup entry
+    if (batter) {
+      const teamName = side === 'local' ? m.local : m.visitante;
+      const entry = (m.lineup[teamName] || []).find(e => e.playerId === batter.playerId);
+      if (entry) {
+        if (!entry.turns) entry.turns = [];
+        let ti = entry.turns.findIndex(t => !t.result);
+        if (ti === -1) { entry.turns.push({ result: '', sb: false, run: false, rbi: 0, direction: '' }); ti = entry.turns.length - 1; }
+        entry.turns[ti].result = code;
+        entry.turns[ti].rbi = rbi;
+        if (code === '4') entry.turns[ti].run = true; // HR → batter scored
+      }
+    }
+
+    if (isOut) {
+      sc.outs = (sc.outs || 0) + 1;
+      autoSave(); renderView();
+      if (sc.outs >= 3) setTimeout(() => advanceHalf(matchId), 700);
+    } else {
+      if (!isOut) sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
+      autoSave(); renderView();
+    }
+  }
+  // ────────────────────────────────────────────────────────────
 
   function viewMatch(id, subView) {
     selectedMatchId = id;
@@ -3914,6 +4070,7 @@
     setLineupSubView,
     editInning,
     editStat,
+    recordPlay,
     toggleOut,
     advanceHalf,
     setBattingFirst,
