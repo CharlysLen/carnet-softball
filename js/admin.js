@@ -1735,7 +1735,9 @@
       outs: raw.outs || 0,
       currentInning: raw.currentInning || 0,
       halfInning: raw.halfInning || 'top',
-      battingFirst: raw.battingFirst || null
+      battingFirst: raw.battingFirst || null,
+      bases: raw.bases || [false, false, false],
+      batterPos: raw.batterPos || { local: 0, visitante: 0 }
     };
     const localTeam = equipos.find(e => e.nombre === m.local);
     const visitTeam = equipos.find(e => e.nombre === m.visitante);
@@ -2881,9 +2883,13 @@
     const n = parseInt(newOrder, 10);
     if (isNaN(n) || n < 1) return;
     entry.order = n;
+    // Renumber all entries sequentially to prevent gaps
+    const sortedEntries = [...m.lineup[teamName]].sort((a, b) => a.order - b.order);
+    sortedEntries.forEach((e, i) => e.order = i + 1);
     const _op = players.find(x => x.id === playerId);
     const _on = _op ? `${_op.nombre.split(' ')[0]} #${_op.dorsal || '?'}` : playerId;
-    logChange(matchId, 'order_change', `${_on}: turno de bateo → ${n}`);
+    const finalOrder = entry.order;
+    logChange(matchId, 'order_change', `${_on}: turno de bateo → ${finalOrder}`);
     autoSave();
     renderView();
   }
@@ -3111,6 +3117,7 @@
 
     let rows = '';
     const seenOrders = new Set();
+    let displayOrder = 0; // Sequential counter for display
     for (const entry of sorted) {
       const st = getStatus(entry);
       const p = players.find(x => x.id === entry.playerId);
@@ -3121,8 +3128,9 @@
       if (st === 'lesionado') {
         const subEntry = entry.replacedBy ? lineup.find(e => e.playerId === entry.replacedBy) : null;
         const subP = subEntry ? players.find(x => x.id === subEntry.playerId) : null;
+        displayOrder++;
         rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;opacity:0.5;${isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
-          <td style="padding:4px 8px;color:#ff9800;font-weight:700;text-decoration:line-through;">${entry.order}</td>
+          <td style="padding:4px 8px;color:#ff9800;font-weight:700;text-decoration:line-through;">${displayOrder}</td>
           <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
           <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
           <td style="padding:4px 8px;font-size:0.8rem;text-decoration:line-through;">${p.nombre} <span style="font-size:0.6rem;color:#ff9800;font-weight:700;">LES</span></td>
@@ -3133,7 +3141,7 @@
           const isSubBat = subEntry.playerId === currentBatterPid;
           const isSubOnDeck = subEntry.playerId === nextBatterPid;
           rows += `<tr onclick="Admin.selectLineupPlayer('${subEntry.playerId}')" style="cursor:pointer;${isSubBat ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isSubOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSubSel ? 'background:rgba(245,166,35,0.1);' : ''}">
-            <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${subEntry.order}</td>
+            <td style="padding:4px 8px;color:var(--green);font-weight:700;">↑ ${displayOrder}</td>
             <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${subP.dorsal || '-'}</td>
             <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(subEntry.position)}</td>
             <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isSubBat ? 'color:var(--gold);' : isSubOnDeck ? 'color:#64b5f6;' : isSubSel ? 'color:var(--gold);' : ''}">${subP.nombre}${isSubBat ? ' <span style="font-size:0.65rem;background:var(--gold);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">AL BATE</span>' : isSubOnDeck ? ' <span style="font-size:0.65rem;background:#64b5f6;color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">SIGUIENTE</span>' : ''}</td>
@@ -3143,8 +3151,9 @@
         }
         seenOrders.add(entry.playerId);
       } else if (!seenOrders.has(entry.playerId)) {
+        displayOrder++;
         rows += `<tr onclick="Admin.selectLineupPlayer('${entry.playerId}')" style="cursor:pointer;${isBatting ? 'background:rgba(245,166,35,0.25);border-left:3px solid var(--gold);' : isOnDeck ? 'background:rgba(100,181,246,0.15);border-left:3px solid #64b5f6;' : isSelected ? 'background:rgba(245,166,35,0.1);' : ''}">
-          <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${entry.order}</td>
+          <td style="padding:4px 8px;color:var(--gold);font-weight:700;">${displayOrder}</td>
           <td style="padding:4px;text-align:center;font-size:0.7rem;color:var(--white-muted);">${p.dorsal || '-'}</td>
           <td style="padding:4px;text-align:center;font-weight:700;font-size:0.7rem;">${posNum(entry.position)}</td>
           <td style="padding:4px 8px;font-weight:600;font-size:0.8rem;${isBatting ? 'color:var(--gold);' : isOnDeck ? 'color:#64b5f6;' : isSelected ? 'color:var(--gold);' : ''}">${p.nombre}${isBatting ? ' <span style="font-size:0.65rem;background:var(--gold);color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">AL BATE</span>' : isOnDeck ? ' <span style="font-size:0.65rem;background:#64b5f6;color:#000;border-radius:4px;padding:1px 5px;font-weight:700;">SIGUIENTE</span>' : ''}${entry.replacesPlayer ? ' <span style="font-size:0.6rem;color:var(--green);">↑</span>' : ''}</td>
