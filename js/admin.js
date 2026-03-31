@@ -1594,7 +1594,7 @@
         ${mvpHtml}
 
         <!-- Sub-tabs -->
-        <div style="display:flex;gap:4px;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;">
+        <div style="display:flex;gap:0;margin-top:20px;border-bottom:2px solid rgba(255,255,255,0.1);padding-bottom:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
           ${['resumen', 'scorecard', 'local', 'visitante', 'bitacora'].map(tab => {
           const pendingLogs = (isAdmin() || isSuperuser()) ? (m.log || []).filter(e => !e.acknowledged && e.actorRol === 'delegado').length : 0;
           const unreadMsgs = getUnreadMsgCount(m);
@@ -1605,8 +1605,8 @@
           const labels = { resumen: '📊 Resumen', scorecard: '🏟 Marcador', local: '⚾ ' + m.local, visitante: '⚾ ' + m.visitante, bitacora: bitacoraLabel };
           const active = lineupSubView === tab;
           return `<button onclick="Admin.setLineupSubView('${tab}')"
-              style="padding:10px 16px;font-size:0.8rem;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
-              background:transparent;color:${active ? 'var(--gold)' : 'var(--white-muted)'};cursor:pointer;margin-bottom:-2px;transition:all 0.2s;">
+              style="padding:10px 14px;font-size:0.78rem;white-space:nowrap;flex-shrink:0;font-weight:${active ? '700' : '400'};border:none;border-bottom:2px solid ${active ? 'var(--gold)' : 'transparent'};
+              background:transparent;color:${active ? 'var(--gold)' : 'var(--white-muted)'};cursor:pointer;margin-bottom:-2px;transition:all 0.2s;-webkit-tap-highlight-color:transparent;">
               ${labels[tab]}</button>`;
         }).join('')}
         </div>
