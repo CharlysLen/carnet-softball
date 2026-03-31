@@ -1799,13 +1799,19 @@
         </tr></thead>
         <tbody>${list.map(p => {
           const s = m.playerStats[p.id];
+          const canEdit = canEditMatch(m);
+          // R: Click to toggle run on last turn
+          const clickR = canEdit ? `onclick="Admin.quickAdjustStat('${m.id}','${p.id}','r',1)" style="cursor:pointer;" title="Alternar carrera anotada"` : '';
+          // RBI: Click to add, Right-click to subtract
+          const clickRBI = canEdit ? `onclick="Admin.quickAdjustStat('${m.id}','${p.id}','rbi',1)" oncontextmenu="event.preventDefault();Admin.quickAdjustStat('${m.id}','${p.id}','rbi',-1)" style="cursor:pointer;" title="Click: +1 RBI, Clic derecho: -1 RBI"` : '';
+          
           return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
             <td style="padding:5px 6px;opacity:0.6;">${p.dorsal}</td>
             <td style="padding:5px 6px;">${p.nombre}</td>
             <td style="padding:5px 6px;text-align:center;font-family:monospace;">${s.h || 0}-${s.ab || 0}</td>
-            <td style="padding:5px 6px;text-align:center;color:var(--green);font-weight:700;">${s.rbi || 0}</td>
+            <td ${clickRBI} style="padding:5px 6px;text-align:center;color:var(--green);font-weight:700;">${s.rbi || 0}</td>
             <td style="padding:5px 6px;text-align:center;color:var(--gold);font-weight:700;">${s.hr || 0}</td>
-            <td style="padding:5px 6px;text-align:center;">${s.r || 0}</td>
+            <td ${clickR} style="padding:5px 6px;text-align:center;background:${s.r > 0 ? 'rgba(76,175,80,0.1)' : 'transparent'};border-radius:4px;">${s.r || 0}</td>
           </tr>`;
         }).join('')}</tbody>
       </table>`;
@@ -2257,11 +2263,12 @@
     // Record batter turn (RBI updated on confirm)
     recordTurn(code, 0, false);
 
-    // Place batter on their base, leave other runners in place
-    sc.bases[battersBase] = true;
+    // Aplicar reglas automáticas para pre-calcular bases, carreras anotadas y remolcadas
+    const rb = applyBaseRules(sc.bases, code);
+    sc.bases = rb.bases;
 
     // Store pending confirmation
-    sc.awaitingRunners = { code, runs: 0, batterPlayerId: batter ? batter.playerId : null, side, inn };
+    sc.awaitingRunners = { code, runs: rb.runs, rbi: rb.rbi, batterPlayerId: batter ? batter.playerId : null, side, inn };
 
     sc.batterPos[side] = (sc.batterPos[side] || 0) + 1;
     renderView(); // no autoSave until confirmed
@@ -2281,6 +2288,9 @@
     if (!m || !m.scorecard || !m.scorecard.awaitingRunners) return;
     const ar = m.scorecard.awaitingRunners;
     ar.runs = Math.max(0, (ar.runs || 0) + delta);
+    if (ar.code !== 'E') {
+      ar.rbi = Math.max(0, (ar.rbi || 0) + delta);
+    }
     renderView();
   }
 
@@ -2299,7 +2309,7 @@
         const entry = (m.lineup[teamName] || []).find(e => e.playerId === ar.batterPlayerId);
         if (entry && entry.turns) {
           const last = [...entry.turns].reverse().find(t => ['H', '2', '3', 'E'].includes(t.result));
-          if (last) last.rbi = runs;
+          if (last) last.rbi = ar.rbi !== undefined ? ar.rbi : (ar.code === 'E' ? 0 : runs);
         }
       }
       m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
@@ -2683,15 +2693,35 @@
         match.playerStats[entry.playerId] = { ab: s.ab, h: s.h, hr: s.hr, rbi: s.rbi, r: s.r };
       }
     }
-    // Recalculate scores
-    let ls = 0, vs = 0;
-    const localPlayers = players.filter(p => p.equipo === match.local).map(p => p.id);
-    for (const [pid, ps] of Object.entries(match.playerStats)) {
-      if (localPlayers.includes(pid)) ls += (ps.r || 0);
-      else vs += (ps.r || 0);
+  }
+
+  function quickAdjustStat(matchId, playerId, stat, delta) {
+    const m = partidos.find(x => x.id === matchId);
+    if (!m || !m.lineup) return;
+    if (!canEditMatch(m)) return;
+
+    let entry = null;
+    for (const entries of Object.values(m.lineup)) {
+      entry = entries.find(e => e.playerId === playerId);
+      if (entry) break;
     }
-    match.localScore = ls;
-    match.visitScore = vs;
+    if (!entry) return;
+
+    if (!entry.turns) entry.turns = [];
+    if (entry.turns.length === 0) {
+      entry.turns.push({ result: '', sb: false, run: false, rbi: 0, direction: '' });
+    }
+    
+    const turn = entry.turns[entry.turns.length - 1];
+    if (stat === 'r') {
+      turn.run = !turn.run;
+    } else if (stat === 'rbi') {
+      turn.rbi = Math.max(0, (turn.rbi || 0) + delta);
+    }
+
+    syncLineupToPlayerStats(m);
+    autoSave();
+    renderView();
   }
 
   function initLineupForMatch(matchId, teamName) {
@@ -4367,6 +4397,7 @@
     editStat,
     recordPlay,
     toggleBaseRunner,
+    quickAdjustStat,
     adjustPendingRuns,
     confirmRunners,
     toggleOut,
