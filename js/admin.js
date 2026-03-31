@@ -4209,9 +4209,6 @@
     handlePhotoUpload: handlePlayerPhotoChange,
     handleTeamImageUpload: handleTeamImageChange,
     handleCSVFile,
-    handleDragStart,
-    handleDragOver,
-    handleDrop,
     closeModal,
     downloadCSVTemplate,
     exportJSON,
@@ -4230,7 +4227,6 @@
     editUser,
     saveUser,
     deleteUser,
-    renderPlayerPhotos,
     openCreateMatch,
     saveNewMatch,
     deleteMatch,
@@ -4264,13 +4260,8 @@
     handleDrop,
     saveLineupPreset,
     loadLineupPreset,
-    renderDashboard,
-    renderPlayerList,
-    renderMatchList,
     renderView,
-    selectLineupPlayer,
-    updateMatchData,
-    archiveMatch
+    selectLineupPlayer
   };
 
   window.Admin = AdminApi;
