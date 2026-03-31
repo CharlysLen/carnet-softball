@@ -1953,8 +1953,8 @@
     const n = parseInt(val, 10);
     if (isNaN(n) || n < 0) { alert('Ingresa un número válido (0 o más)'); return; }
     sc[team][idx] = n;
-    m.localScore = sc.local.reduce((s, r) => s + (r || 0), 0);
-    m.visitScore = sc.visitante.reduce((s, r) => s + (r || 0), 0);
+    m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+    m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
     autoSave();
     renderView();
   }
@@ -2119,14 +2119,26 @@
     const { bases, runs, rbi, isOut } = applyBaseRules(sc.bases, code);
     sc.bases = bases;
 
-    // Update inning score
+    // Update inning score (Ensure numeric addition)
+    const currentScore = sc[side][inn] || 0;
     if (runs > 0) {
-      sc[side][inn] = (sc[side][inn] || 0) + runs;
-    } else if (sc[side][inn] === null && !isOut) {
+      sc[side][inn] = Number(currentScore) + runs;
+    } else if (currentScore === null && !isOut) {
       sc[side][inn] = 0;
     }
-    m.localScore = (sc.local || []).reduce((s, r) => s + (r || 0), 0);
-    m.visitScore = (sc.visitante || []).reduce((s, r) => s + (r || 0), 0);
+
+    // Update Team Total Stats (Hits/Errors)
+    if (['H', '2', '3', '4'].includes(code)) {
+      if (!sc.hits) sc.hits = { local: 0, visitante: 0 };
+      sc.hits[side] = (Number(sc.hits[side]) || 0) + 1;
+    }
+    if (code === 'E') {
+      const defendingSide = side === 'local' ? 'visitante' : 'local';
+      if (!sc.errors) sc.errors = { local: 0, visitante: 0 };
+      sc.errors[defendingSide] = (Number(sc.errors[defendingSide]) || 0) + 1;
+    }
+    m.localScore = (sc.local || []).reduce((s, r) => s + (Number(r) || 0), 0);
+    m.visitScore = (sc.visitante || []).reduce((s, r) => s + (Number(r) || 0), 0);
 
     // Record on batter's lineup entry
     if (batter) {
